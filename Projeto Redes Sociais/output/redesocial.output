@@ -1,0 +1,10 @@
+[SUCCESS]ADD=Jose_da_Silva
+[SUCCESS]SHOW=Jose_da_Silva<-Jose_da_Silva->Jose_da_Silva
+[FAILURE]ADD=Jose_da_Silva
+[SUCCESS]ADD=Joao_dos_Santos
+[SUCCESS]ADD=Maria_da_Penha
+[SUCCESS]REMOVE=Joao_dos_Santos
+[FAILURE]REMOVE=Maria_da_Silva
+[SUCCESS]ADD=Alan_Turing
+[SUCCESS]SHOW=Jose_da_Silva<-Maria_da_Penha->Alan_Turing
+[FAILURE]SHOW=?<-Bruno_Prado->?
