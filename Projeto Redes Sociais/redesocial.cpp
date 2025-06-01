@@ -1,8 +1,6 @@
 #include <iostream>
 #include <fstream>
 #include <string>
-#include <unordered_map>
-#include <algorithm>
 #include <sstream>
 #include <cctype>
 
@@ -13,27 +11,84 @@ struct Usuario {
     string nome;
     Usuario* anterior;
     Usuario* proximo;
-
     Usuario(const string& nome) : nome(nome), anterior(nullptr), proximo(nullptr) {}
 };
 
-// Mapa para acesso rápido aos usuários pelo nome
-unordered_map<string, Usuario*> mapaUsuarios;
+// Estrutura para lista encadeada na tabela hash
+struct NoHash {
+    string chave;
+    Usuario* usuario;
+    NoHash* prox;
+    NoHash(const string& chave, Usuario* usuario) : chave(chave), usuario(usuario), prox(nullptr) {}
+};
+
+// Tabela hash simples
+const int TAM_HASH = 1031; // Primo para melhor distribuição
+NoHash* tabela_hash[TAM_HASH] = {nullptr};
+
 // Ponteiro para o último usuário inserido na lista
 Usuario* ultimo = nullptr;
+
+// Função de hash simples para strings
+unsigned int hash_string(const string& s) {
+    unsigned int h = 0;
+    for (size_t i = 0; i < s.size(); ++i)
+        h = h * 31 + (unsigned char)s[i];
+    return h % TAM_HASH;
+}
+
+// Busca usuário na tabela hash
+Usuario* buscar_usuario(const string& nome) {
+    unsigned int h = hash_string(nome);
+    NoHash* no = tabela_hash[h];
+    while (no) {
+        if (no->chave == nome) return no->usuario;
+        no = no->prox;
+    }
+    return nullptr;
+}
+
+// Insere usuário na tabela hash
+void inserir_usuario(const string& nome, Usuario* usuario) {
+    unsigned int h = hash_string(nome);
+    NoHash* novo = new NoHash(nome, usuario);
+    novo->prox = tabela_hash[h];
+    tabela_hash[h] = novo;
+}
+
+// Remove usuário da tabela hash
+void remover_usuario(const string& nome) {
+    unsigned int h = hash_string(nome);
+    NoHash* no = tabela_hash[h];
+    NoHash* ant = nullptr;
+    while (no) {
+        if (no->chave == nome) {
+            if (ant) ant->prox = no->prox;
+            else tabela_hash[h] = no->prox;
+            delete no;
+            return;
+        }
+        ant = no;
+        no = no->prox;
+    }
+}
 
 // Função para substituir espaços por underscores em uma string
 string substituir_espacos(const string& s) {
     string resultado = s;
-    replace(resultado.begin(), resultado.end(), ' ', '_');
+    for (size_t i = 0; i < resultado.size(); ++i) {
+        if (resultado[i] == ' ') resultado[i] = '_';
+    }
     return resultado;
 }
 
 // Função para remover espaços em branco do início e fim de uma string
 string aparar(const string &s) {
-    size_t inicio = s.find_first_not_of(" \t");
-    if (inicio == string::npos) return "";
-    size_t fim = s.find_last_not_of(" \t");
+    size_t inicio = 0;
+    while (inicio < s.size() && (s[inicio] == ' ' || s[inicio] == '\t')) ++inicio;
+    if (inicio == s.size()) return "";
+    size_t fim = s.size() - 1;
+    while (fim > inicio && (s[fim] == ' ' || s[fim] == '\t')) --fim;
     return s.substr(inicio, fim - inicio + 1);
 }
 
@@ -47,98 +102,84 @@ void processar_comando(const string& linha) {
     string nome = aparar(parte_nome);
 
     if (comando == "ADD") {
-        // Adiciona um novo usuário se ele não existir
-        if (mapaUsuarios.find(nome) != mapaUsuarios.end()) {
+        if (buscar_usuario(nome)) {
             cout << "[FAILURE]ADD=" << substituir_espacos(nome) << endl;
         } else {
             Usuario* novo_usuario = new Usuario(nome);
             if (ultimo == nullptr) {
-                // Primeiro usuário: aponta para si mesmo
                 novo_usuario->anterior = novo_usuario;
                 novo_usuario->proximo = novo_usuario;
                 ultimo = novo_usuario;
             } else {
-                // Insere novo usuário após o último
                 novo_usuario->anterior = ultimo;
                 novo_usuario->proximo = ultimo->proximo;
                 ultimo->proximo->anterior = novo_usuario;
                 ultimo->proximo = novo_usuario;
                 ultimo = novo_usuario;
             }
-            mapaUsuarios[nome] = novo_usuario;
+            inserir_usuario(nome, novo_usuario);
             cout << "[SUCCESS]ADD=" << substituir_espacos(nome) << endl;
         }
     } else if (comando == "REMOVE") {
-        // Remove um usuário se ele existir
-        if (mapaUsuarios.find(nome) == mapaUsuarios.end()) {
+        Usuario* usuario = buscar_usuario(nome);
+        if (!usuario) {
             cout << "[FAILURE]REMOVE=" << substituir_espacos(nome) << endl;
         } else {
-            Usuario* usuario = mapaUsuarios[nome];
             Usuario* anterior_usuario = usuario->anterior;
             Usuario* proximo_usuario = usuario->proximo;
-
             anterior_usuario->proximo = proximo_usuario;
             proximo_usuario->anterior = anterior_usuario;
-
-            // Atualiza o ponteiro 'ultimo' se necessário
             if (ultimo == usuario) {
                 ultimo = (anterior_usuario == usuario) ? nullptr : anterior_usuario;
             }
-
-            mapaUsuarios.erase(nome);
+            remover_usuario(nome);
             delete usuario;
             cout << "[SUCCESS]REMOVE=" << substituir_espacos(nome) << endl;
         }
     } else if (comando == "SHOW") {
-        // Mostra o usuário e seus vizinhos na lista
-        auto it = mapaUsuarios.find(nome);
-        if (it == mapaUsuarios.end()) {
+        Usuario* usuario = buscar_usuario(nome);
+        if (!usuario) {
             cout << "[FAILURE]SHOW=?<-" << substituir_espacos(nome) << "->?" << endl;
         } else {
-            Usuario* usuario = it->second;
             string nome_anterior = usuario->anterior->nome;
             string nome_proximo = usuario->proximo->nome;
-            cout << "[SUCCESS]SHOW=" << substituir_espacos(nome_anterior) << "<-" 
+            cout << "[SUCCESS]SHOW=" << substituir_espacos(nome_anterior) << "<-"
                  << substituir_espacos(usuario->nome) << "->" << substituir_espacos(nome_proximo) << endl;
         }
     }
 }
 
 int main(int argc, char* argv[]) {
-    // Verifica se o número de argumentos está correto (programa, entrada, saída)
     if (argc != 3) {
         cerr << "Uso: " << argv[0] << " <entrada> <saida>" << endl;
         return 1;
     }
-
-    // Abre o arquivo de entrada para leitura e o de saída para escrita
     ifstream entrada(argv[1]);
     ofstream saida(argv[2]);
-
-    // Verifica se os arquivos foram abertos corretamente
     if (!entrada.is_open() || !saida.is_open()) {
         cerr << "Erro ao abrir arquivos." << endl;
         return 1;
     }
-
-    // Redireciona o cout para o arquivo de saída
     streambuf* cout_buf = cout.rdbuf();
     cout.rdbuf(saida.rdbuf());
 
     string linha;
-    // Lê cada linha do arquivo de entrada e processa o comando
     while (getline(entrada, linha)) {
-        if (linha.empty()) continue; // Ignora linhas vazias
+        if (linha.empty()) continue;
         processar_comando(linha);
     }
 
-    // Libera a memória dos usuários criados
-    for (auto& par : mapaUsuarios) {
-        delete par.second;
+    // Libera a memória dos usuários criados e da tabela hash
+    for (int i = 0; i < TAM_HASH; ++i) {
+        NoHash* no = tabela_hash[i];
+        while (no) {
+            delete no->usuario;
+            NoHash* prox = no->prox;
+            delete no;
+            no = prox;
+        }
     }
 
-    // Restaura o cout para o console padrão
     cout.rdbuf(cout_buf);
-
     return 0;
 }
