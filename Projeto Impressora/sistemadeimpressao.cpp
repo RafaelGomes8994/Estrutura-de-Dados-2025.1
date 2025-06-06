@@ -1,103 +1,225 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <sstream>
 
-using namespace std;
-
-const int MAX_PRINTERS = 100;
-const int MAX_DOCS = 1000;
-
-struct Document {
-    string name;
+// Estrutura para informações do documento
+struct DocumentInfo {
+    std::string name;
     int pages;
-    int index;
+    std::string formatted_name_pages;
+
+    DocumentInfo() : pages(0) {}
 };
 
+// Estrutura para informações da impressora
 struct Printer {
-    string name;
-    int free_time;
-    Document queue[MAX_DOCS];
-    int queue_size;
+    std::string name;
+    DocumentInfo** history_items; // Array de ponteiros para DocumentInfo
+    int history_count;
+    int max_history_capacity;
+    int busy_until_time;
+
+    Printer() : history_items(nullptr), history_count(0), max_history_capacity(0), busy_until_time(0) {}
+
+    void init_history(int total_docs) {
+        max_history_capacity = total_docs;
+        history_items = new DocumentInfo*[max_history_capacity];
+        history_count = 0;
+        busy_until_time = 0;
+    }
+
+    // OTIMIZAÇÃO: Adiciona um ponteiro ao final do histórico. Operação O(1).
+    void add_to_history(DocumentInfo* doc_ptr) {
+        if (history_count < max_history_capacity) {
+            history_items[history_count] = doc_ptr;
+            history_count++;
+        }
+    }
+
+    void cleanup_history() {
+        delete[] history_items;
+        history_items = nullptr;
+    }
 };
 
-struct Event {
-    string name;
-    int pages;
-    int end_time;
-    int index;
-};
+// --- Fila manual (armazena ponteiros para DocumentInfo) ---
+DocumentInfo** docs_to_print_queue_arr;
+int queue_capacity;
+int queue_front_idx;
+int queue_rear_idx;
+int current_queue_size;
+
+void init_queue(int capacity) {
+    docs_to_print_queue_arr = new DocumentInfo*[capacity];
+    queue_capacity = capacity;
+    queue_front_idx = 0;
+    queue_rear_idx = -1;
+    current_queue_size = 0;
+}
+
+bool is_queue_empty() { return current_queue_size == 0; }
+
+void enqueue(DocumentInfo* doc_ptr) {
+    if (current_queue_size < queue_capacity) {
+        queue_rear_idx = (queue_rear_idx + 1) % queue_capacity;
+        docs_to_print_queue_arr[queue_rear_idx] = doc_ptr;
+        current_queue_size++;
+    }
+}
+
+DocumentInfo* dequeue() {
+    DocumentInfo* doc_ptr = nullptr;
+    if (!is_queue_empty()) {
+        doc_ptr = docs_to_print_queue_arr[queue_front_idx];
+        queue_front_idx = (queue_front_idx + 1) % queue_capacity;
+        current_queue_size--;
+    }
+    return doc_ptr;
+}
+
+DocumentInfo* front_of_queue() {
+    DocumentInfo* doc_ptr = nullptr;
+    if (!is_queue_empty()) {
+        doc_ptr = docs_to_print_queue_arr[queue_front_idx];
+    }
+    return doc_ptr;
+}
+
+void cleanup_queue() {
+    delete[] docs_to_print_queue_arr;
+    docs_to_print_queue_arr = nullptr;
+}
+// --- Fim da Fila Manual ---
 
 int main(int argc, char* argv[]) {
-    if (argc < 3) return 1;
-    ifstream entrada(argv[1]);
-    ofstream saida(argv[2]);
-    int N;
-    entrada >> N;
-    Printer printers[MAX_PRINTERS];
-    for (int i = 0; i < N; ++i) {
-        entrada >> printers[i].name;
-        printers[i].free_time = 0;
-        printers[i].queue_size = 0;
-    }
-    int M;
-    entrada >> M;
-    Document docs[MAX_DOCS];
-    for (int i = 0; i < M; ++i) {
-        entrada >> docs[i].name >> docs[i].pages;
-        docs[i].index = i;
+    if (argc != 3) {
+        std::cerr << "Uso: " << argv[0] << " <arquivo_de_entrada> <arquivo_de_saida>" << std::endl;
+        return 1;
     }
 
-    // Alocação dos documentos
-    for (int i = 0; i < M; ++i) {
-        // Encontra impressora com menor free_time
-        int best = 0;
-        for (int j = 1; j < N; ++j)
-            if (printers[j].free_time < printers[best].free_time)
-                best = j;
-        printers[best].queue[printers[best].queue_size] = docs[i];
-        printers[best].queue_size++;
-        printers[best].free_time += docs[i].pages;
+    std::ifstream inputFile(argv[1]);
+    if (!inputFile.is_open()) {
+        std::cerr << "Erro: Nao foi possivel abrir o arquivo de entrada '" << argv[1] << "'" << std::endl;
+        return 1;
+    }
 
-        // Impressão do estado atual da fila da impressora escolhida
-        saida << printers[best].name << ":";
-        for (int k = 0; k < printers[best].queue_size; ++k) {
-            if (k) saida << ",";
-            saida << printers[best].queue[k].name << "-" << printers[best].queue[k].pages << "p";
+    std::ofstream outputFile(argv[2]);
+    if (!outputFile.is_open()) {
+        std::cerr << "Erro: Nao foi possivel criar o arquivo de saida '" << argv[2] << "'" << std::endl;
+        return 1;
+    }
+
+    int num_printers;
+    inputFile >> num_printers;
+    Printer* printers_list = new Printer[num_printers];
+    for (int i = 0; i < num_printers; ++i) {
+        inputFile >> printers_list[i].name;
+    }
+
+    int num_documents;
+    inputFile >> num_documents;
+    for (int i = 0; i < num_printers; ++i) {
+        printers_list[i].init_history(num_documents);
+    }
+    
+    init_queue(num_documents);
+    DocumentInfo* all_docs_for_summary = new DocumentInfo[num_documents];
+    int total_pages_sum = 0;
+
+    // OTIMIZAÇÃO: Reutiliza o mesmo objeto ostringstream
+    std::ostringstream oss;
+    
+    // OTIMIZAÇÃO: Combina a leitura e o enfileiramento em um único loop
+    for (int i = 0; i < num_documents; ++i) {
+        // Lê o documento para o armazenamento principal
+        inputFile >> all_docs_for_summary[i].name >> all_docs_for_summary[i].pages;
+
+        // Formata a string de saída, limpando o stream antes de usar
+        oss.str("");
+        oss.clear();
+        oss << all_docs_for_summary[i].name << "-" << all_docs_for_summary[i].pages << "p";
+        all_docs_for_summary[i].formatted_name_pages = oss.str();
+
+        total_pages_sum += all_docs_for_summary[i].pages;
+
+        // Adiciona um ponteiro para o documento recém-lido na fila
+        enqueue(&all_docs_for_summary[i]);
+    }
+
+    // --- Simulação ---
+    int current_time = 0;
+    int documents_assigned_count = 0;
+    while (documents_assigned_count < num_documents) {
+        bool job_assigned_this_tick = false;
+
+        for (int i = 0; i < num_printers; ++i) {
+            if (!is_queue_empty() && printers_list[i].busy_until_time <= current_time) {
+                DocumentInfo* doc_to_print_ptr = front_of_queue();
+                dequeue();
+
+                printers_list[i].busy_until_time = current_time + doc_to_print_ptr->pages;
+
+                outputFile << printers_list[i].name << ":" << doc_to_print_ptr->formatted_name_pages;
+                
+                // OTIMIZAÇÃO: Imprime o histórico em ordem inversa para corresponder à saída.
+                // O histórico agora está [mais antigo, ..., mais recente], então iteramos de trás para frente.
+                for (int h = printers_list[i].history_count - 1; h >= 0; --h) {
+                    outputFile << ", " << printers_list[i].history_items[h]->formatted_name_pages;
+                }
+                outputFile << std::endl;
+
+                // Adiciona ao histórico DEPOIS de imprimir, para que não apareça na sua própria linha de histórico.
+                printers_list[i].add_to_history(doc_to_print_ptr);
+
+                documents_assigned_count++;
+                job_assigned_this_tick = true;
+                if (documents_assigned_count == num_documents) break;
+            }
         }
-        saida << endl;
-    }
+        
+        if (documents_assigned_count == num_documents) break;
 
-    // Empilhamento dos eventos (folhas)
-    Event events[MAX_DOCS];
-    int events_size = 0;
-    for (int i = 0; i < N; ++i) {
-        int t = 0;
-        for (int j = 0; j < printers[i].queue_size; ++j) {
-            t += printers[i].queue[j].pages;
-            events[events_size].name = printers[i].queue[j].name;
-            events[events_size].pages = printers[i].queue[j].pages;
-            events[events_size].end_time = t;
-            events[events_size].index = printers[i].queue[j].index;
-            events_size++;
-        }
-    }
-    // Ordena por end_time decrescente, depois index crescente (bubble sort)
-    for (int i = 0; i < events_size - 1; ++i) {
-        for (int j = 0; j < events_size - i - 1; ++j) {
-            if (events[j].end_time < events[j + 1].end_time ||
-                (events[j].end_time == events[j + 1].end_time && events[j].index > events[j + 1].index)) {
-                Event tmp = events[j];
-                events[j] = events[j + 1];
-                events[j + 1] = tmp;
+        if (job_assigned_this_tick) {
+            current_time++;
+        } else {
+            if (!is_queue_empty()) {
+                int min_next_free_time = -1;
+                for (int i = 0; i < num_printers; ++i) {
+                    if (printers_list[i].busy_until_time > current_time) {
+                        if (min_next_free_time == -1 || printers_list[i].busy_until_time < min_next_free_time) {
+                            min_next_free_time = printers_list[i].busy_until_time;
+                        }
+                    }
+                }
+                if (min_next_free_time != -1) {
+                    current_time = min_next_free_time;
+                } else {
+                    outputFile << "ERRO: Simulacao estagnada." << std::endl;
+                    std::cerr << "ERRO: Simulacao estagnada. Verifique a logica ou a entrada." << std::endl;
+                    break; 
+                }
+            } else {
+                break;
             }
         }
     }
 
-    int total = 0;
-    for (int i = 0; i < M; ++i) total += docs[i].pages;
-    saida << total << "p" << endl;
-    for (int i = 0; i < events_size; ++i)
-        saida << events[i].name << "-" << events[i].pages << "p" << endl;
+    // --- Saída do Sumário ---
+    outputFile << total_pages_sum << "p" << std::endl;
+    for (int i = num_documents - 1; i >= 0; --i) {
+        outputFile << all_docs_for_summary[i].formatted_name_pages << std::endl;
+    }
+
+    // --- Limpeza ---
+    inputFile.close();
+    outputFile.close();
+    for (int i = 0; i < num_printers; ++i) {
+        printers_list[i].cleanup_history();
+    }
+    delete[] printers_list;
+    delete[] all_docs_for_summary; 
+    cleanup_queue();
 
     return 0;
 }
