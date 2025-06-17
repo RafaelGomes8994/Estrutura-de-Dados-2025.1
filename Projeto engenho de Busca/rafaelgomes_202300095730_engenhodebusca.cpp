@@ -1,13 +1,8 @@
 #include <iostream>
 #include <string>
+#include <fstream>
 
-// --- Documentação da Função checksum ---
-// Função para calcular o checksum de 8 bits de uma string.
-// Realiza a operação XOR (ou-exclusivo) com os valores ASCII de todos os caracteres.
-// Parâmetros:
-//   - texto: A string de entrada para o cálculo.
-// Retorna:
-//   - Um inteiro representando o valor do checksum.
+// Função para calcular o checksum de uma string usando XOR
 int checksum(const std::string& texto) {
     int chk = 0;
     for (char c : texto) {
@@ -16,45 +11,54 @@ int checksum(const std::string& texto) {
     return chk;
 }
 
-int main() {
-    // Desativa a sincronização com stdio para acelerar a leitura de dados
-    std::ios_base::sync_with_stdio(false);
-    std::cin.tie(NULL);
-
-    int T, C; // T: Número de servidores, C: Capacidade máxima por servidor
-    std::cin >> T >> C;
-
-    int N; // Número total de grupos de requisições
-    std::cin >> N;
-
-    // --- Estrutura de Dados dos Servidores ---
-    // Alocação dinâmica para contornar a restrição de não usar std::vector
-    // server_load: armazena a carga atual (nº de padrões) de cada servidor.
-    int* server_load = new int[T];
-    // server_requests: um array 2D para armazenar as strings dos padrões de cada servidor.
-    std::string** server_requests = new std::string*[T];
-
-    // Inicialização das estruturas
-    for (int i = 0; i < T; ++i) {
-        server_load[i] = 0; // Carga inicial é 0
-        server_requests[i] = new std::string[C]; // Aloca espaço para C padrões
+int main(int argc, char* argv[]) {
+    // Verifica se os argumentos de entrada estão corretos
+    if (argc != 3) {
+        std::cerr << "Uso: " << argv[0] << " <arquivo_entrada> <arquivo_saida>" << std::endl;
+        return 1;
     }
 
-    // Loop principal para processar cada grupo de requisições
+    std::ifstream inputFile(argv[1]);
+    std::ofstream outputFile(argv[2]);
+
+    // Verifica se os arquivos foram abertos corretamente
+    if (!inputFile.is_open()) {
+        std::cerr << "Erro: Nao foi possivel abrir o arquivo de entrada '" << argv[1] << "'" << std::endl;
+        return 1;
+    }
+    if (!outputFile.is_open()) {
+        std::cerr << "Erro: Nao foi possivel abrir o arquivo de saida '" << argv[2] << "'" << std::endl;
+        return 1;
+    }
+
+    int T, C;
+    inputFile >> T >> C; // Lê o número de servidores (T) e a capacidade de cada servidor (C)
+
+    int N;
+    inputFile >> N; // Lê o número de conjuntos de padrões
+
+    // Aloca arrays para controlar a carga e os pedidos de cada servidor
+    int* server_load = new int[T];
+    std::string** server_requests = new std::string*[T];
+
+    for (int i = 0; i < T; ++i) {
+        server_load[i] = 0; // Inicializa a carga de cada servidor
+        server_requests[i] = new std::string[C]; // Inicializa o array de pedidos de cada servidor
+    }
+
+    // Processa cada conjunto de padrões
     for (int i = 0; i < N; ++i) {
-        int m; // Número de padrões neste grupo
-        std::cin >> m;
+        int m;
+        inputFile >> m; // Lê a quantidade de padrões no conjunto
         for (int j = 0; j < m; ++j) {
             std::string padrao;
-            std::cin >> padrao;
+            inputFile >> padrao; // Lê o padrão
 
-            int cs = checksum(padrao);
+            int cs = checksum(padrao); // Calcula o checksum do padrão
 
-            // --- Lógica de Hashing Duplo ---
+            // Calcula os hashes para determinar o servidor inicial e o incremento
             long long h1 = (7919LL * cs) % T;
             long long h2 = (104729LL * cs + 123) % T;
-            
-            // Garante que h2 não seja 0 para evitar loops infinitos se T for um divisor.
             if (h2 == 0) {
                 h2 = 1;
             }
@@ -63,29 +67,31 @@ int main() {
             long long servidor_alocado = -1;
             long long servidor_anterior = -1;
 
-            while (tentativas < T) { // Tenta no máximo T vezes para evitar loop infinito
+            // Tenta alocar o padrão em um servidor usando double hashing
+            while (tentativas < T) {
                 long long servidor_atual = (h1 + tentativas * h2) % T;
                 
-                if (server_load[servidor_atual] < C) { // Encontrou um servidor com espaço
+                // Verifica se o servidor tem capacidade disponível
+                if (server_load[servidor_atual] < C) {
                     servidor_alocado = servidor_atual;
                     
-                    // Se houve realocação (tentativas > 0), imprime a mudança
+                    // Se não for a primeira tentativa, registra a transferência
                     if (tentativas > 0 && servidor_anterior != -1) {
-                        std::cout << "S" << servidor_anterior << "->" << "S" << servidor_alocado << std::endl;
+                        outputFile << "S" << servidor_anterior << "->" << "S" << servidor_alocado << std::endl;
                     }
                     
-                    // Adiciona o padrão ao servidor
+                    // Adiciona o padrão ao servidor e incrementa a carga
                     server_requests[servidor_alocado][server_load[servidor_alocado]] = padrao;
                     server_load[servidor_alocado]++;
 
-                    // Imprime o estado atual do servidor
-                    std::cout << "S" << servidor_alocado << ":";
+                    // Escreve o estado atual do servidor no arquivo de saída
+                    outputFile << "S" << servidor_alocado << ":";
                     for (int k = 0; k < server_load[servidor_alocado]; ++k) {
-                        std::cout << (k == 0 ? "" : ",") << server_requests[servidor_alocado][k];
+                        outputFile << (k == 0 ? "" : ",") << server_requests[servidor_alocado][k];
                     }
-                    std::cout << std::endl;
+                    outputFile << std::endl;
                     
-                    break; // Sai do loop de tentativas
+                    break;
                 }
                 
                 servidor_anterior = servidor_atual;
@@ -94,8 +100,7 @@ int main() {
         }
     }
 
-    // --- Limpeza da Memória ---
-    // Libera a memória alocada dinamicamente para evitar memory leaks
+    // Libera a memória alocada
     for (int i = 0; i < T; ++i) {
         delete[] server_requests[i];
     }
