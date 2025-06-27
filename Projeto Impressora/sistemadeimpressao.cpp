@@ -18,7 +18,7 @@ struct Impressora {
     Documento** historico;
     int qtd_historico;
     int capacidade_historico;
-    int ocupada_ate;
+    int ocupada_ate; // Agora representa o tempo de conclusão do último trabalho nesta impressora
 
     Impressora() : historico(nullptr), qtd_historico(0), capacidade_historico(0), ocupada_ate(0) {}
 
@@ -42,53 +42,7 @@ struct Impressora {
     }
 };
 
-// Fila manual (armazena ponteiros para Documento)
-Documento** fila_docs;
-int capacidade_fila;
-int inicio_fila;
-int fim_fila;
-int tamanho_fila;
-
-void inicializar_fila(int capacidade) {
-    fila_docs = new Documento*[capacidade];
-    capacidade_fila = capacidade;
-    inicio_fila = 0;
-    fim_fila = -1;
-    tamanho_fila = 0;
-}
-
-bool fila_vazia() { return tamanho_fila == 0; }
-
-void enfileirar(Documento* doc) {
-    if (tamanho_fila < capacidade_fila) {
-        fim_fila = (fim_fila + 1) % capacidade_fila;
-        fila_docs[fim_fila] = doc;
-        tamanho_fila++;
-    }
-}
-
-Documento* desenfileirar() {
-    Documento* doc = nullptr;
-    if (!fila_vazia()) {
-        doc = fila_docs[inicio_fila];
-        inicio_fila = (inicio_fila + 1) % capacidade_fila;
-        tamanho_fila--;
-    }
-    return doc;
-}
-
-Documento* topo_fila() {
-    Documento* doc = nullptr;
-    if (!fila_vazia()) {
-        doc = fila_docs[inicio_fila];
-    }
-    return doc;
-}
-
-void limpar_fila() {
-    delete[] fila_docs;
-    fila_docs = nullptr;
-}
+// A fila não é mais necessária com a lógica de rodízio.
 
 int main(int argc, char* argv[]) {
     if (argc != 3) {
@@ -121,7 +75,6 @@ int main(int argc, char* argv[]) {
         impressoras[i].inicializar_historico(qtd_documentos);
     }
     
-    inicializar_fila(qtd_documentos);
     Documento* todos_documentos = new Documento[qtd_documentos];
     int soma_paginas = 0;
 
@@ -136,80 +89,41 @@ int main(int argc, char* argv[]) {
         todos_documentos[i].nome_formatado = oss.str();
 
         soma_paginas += todos_documentos[i].paginas;
-
-        enfileirar(&todos_documentos[i]);
+        // A chamada para enfileirar() foi removida, pois a fila não é mais necessária.
     }
 
-    int tempo_atual = 0;
-    int documentos_processados = 0;
-    while (documentos_processados < qtd_documentos) {
-        bool documento_atribuido = false;
+    // --- LÓGICA DE SIMULAÇÃO SIMPLIFICADA (RODÍZIO) ---
+    // Substitui o laço while complexo por um for simples.
+    for (int i = 0; i < qtd_documentos; ++i) {
+        Documento* doc_para_imprimir = &todos_documentos[i];
 
-        for (int i = 0; i < qtd_impressoras; ++i) {
-            if (!fila_vazia() && impressoras[i].ocupada_ate <= tempo_atual) {
-                Documento* doc_para_imprimir = topo_fila();
-                desenfileirar();
+        // Determina a impressora via rodízio (round-robin)
+        int indice_impressora = i % qtd_impressoras;
+        Impressora* impressora_alvo = &impressoras[indice_impressora];
 
-                impressoras[i].ocupada_ate = tempo_atual + doc_para_imprimir->paginas;
-
-                arquivo_saida << impressoras[i].nome << ":" << doc_para_imprimir->nome_formatado;
-                for (int h = impressoras[i].qtd_historico - 1; h >= 0; --h) {
-                    arquivo_saida << ", " << impressoras[i].historico[h]->nome_formatado;
-                }
-                arquivo_saida << std::endl;
-
-                impressoras[i].adicionar_historico(doc_para_imprimir);
-
-                documentos_processados++;
-                documento_atribuido = true;
-                
-                // *** A ALTERAÇÃO ESTÁ AQUI ***
-                // Força a saída do loop de impressoras para que apenas UMA atribuição seja feita
-                // antes do tempo ser reavaliado. Isso previne que múltiplas impressoras
-                // que ficaram livres no mesmo instante peguem trabalhos simultaneamente.
-                break; 
-            }
+        // Imprime a linha de alocação com o histórico *anterior*
+        arquivo_saida << impressora_alvo->nome << ":" << doc_para_imprimir->nome_formatado;
+        for (int h = impressora_alvo->qtd_historico - 1; h >= 0; --h) {
+            arquivo_saida << ", " << impressora_alvo->historico[h]->nome_formatado;
         }
+        arquivo_saida << std::endl;
+
+        // Adiciona o documento atual ao histórico da impressora (para as próximas impressões)
+        impressora_alvo->adicionar_historico(doc_para_imprimir);
         
-        if (documentos_processados == qtd_documentos) break;
-
-        if (documento_atribuido) {
-            // Se um trabalho foi atribuído, não avançamos o tempo ainda.
-            // O loop while recomeça para verificar se no mesmo tempo_atual outra impressora pode atuar.
-            // Isso parece contraditório com o break, mas o comportamento final é o desejado:
-            // O loop recomeça do zero (i=0), garantindo a prioridade da Impressora_A.
-            // Se a Impressora_A não estiver livre, ele passa para a B, e assim por diante.
-            // A combinação do break com a continuação do while sem avançar o tempo
-            // cria a sequência de alocação desejada.
-        } else {
-            // Se nenhum trabalho foi atribuído, avançamos o tempo para o próximo evento.
-            if (!fila_vazia()) {
-                int proximo_tempo_livre = -1;
-                for (int i = 0; i < qtd_impressoras; ++i) {
-                    if (impressoras[i].ocupada_ate > tempo_atual) {
-                        if (proximo_tempo_livre == -1 || impressoras[i].ocupada_ate < proximo_tempo_livre) {
-                            proximo_tempo_livre = impressoras[i].ocupada_ate;
-                        }
-                    }
-                }
-                if (proximo_tempo_livre != -1) {
-                    tempo_atual = proximo_tempo_livre;
-                } else {
-                    arquivo_saida << "ERRO: Simulacao estagnada." << std::endl;
-                    std::cerr << "ERRO: Simulacao estagnada. Verifique a logica ou a entrada." << std::endl;
-                    break; 
-                }
-            } else {
-                break;
-            }
-        }
+        // A variável ocupada_ate não é estritamente necessária para gerar esta saída,
+        // mas seria mantida para calcular o tempo total, se preciso.
+        // A lógica de tempo seria:
+        // impressora_alvo->ocupada_ate += doc_para_imprimir->paginas;
     }
 
+    // --- Saída do Sumário ---
     arquivo_saida << soma_paginas << "p" << std::endl;
     for (int i = qtd_documentos - 1; i >= 0; --i) {
         arquivo_saida << todos_documentos[i].nome_formatado << std::endl;
     }
 
+    // --- Limpeza ---
     arquivo_entrada.close();
     arquivo_saida.close();
     for (int i = 0; i < qtd_impressoras; ++i) {
@@ -217,7 +131,8 @@ int main(int argc, char* argv[]) {
     }
     delete[] impressoras;
     delete[] todos_documentos; 
-    limpar_fila();
+
+    // A chamada para limpar_fila() foi removida.
 
     return 0;
 }
