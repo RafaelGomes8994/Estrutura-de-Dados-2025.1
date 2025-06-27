@@ -162,15 +162,27 @@ int main(int argc, char* argv[]) {
 
                 documentos_processados++;
                 documento_atribuido = true;
-                if (documentos_processados == qtd_documentos) break;
+                
+                // *** A ALTERAÇÃO ESTÁ AQUI ***
+                // Força a saída do loop de impressoras para que apenas UMA atribuição seja feita
+                // antes do tempo ser reavaliado. Isso previne que múltiplas impressoras
+                // que ficaram livres no mesmo instante peguem trabalhos simultaneamente.
+                break; 
             }
         }
         
         if (documentos_processados == qtd_documentos) break;
 
         if (documento_atribuido) {
-            tempo_atual++;
+            // Se um trabalho foi atribuído, não avançamos o tempo ainda.
+            // O loop while recomeça para verificar se no mesmo tempo_atual outra impressora pode atuar.
+            // Isso parece contraditório com o break, mas o comportamento final é o desejado:
+            // O loop recomeça do zero (i=0), garantindo a prioridade da Impressora_A.
+            // Se a Impressora_A não estiver livre, ele passa para a B, e assim por diante.
+            // A combinação do break com a continuação do while sem avançar o tempo
+            // cria a sequência de alocação desejada.
         } else {
+            // Se nenhum trabalho foi atribuído, avançamos o tempo para o próximo evento.
             if (!fila_vazia()) {
                 int proximo_tempo_livre = -1;
                 for (int i = 0; i < qtd_impressoras; ++i) {
