@@ -1,7 +1,0 @@
-S0:ufs
-S2:a
-S1:b
-S0:ufs,c
-S2:a,cd
-S0->S1
-S1:b,ef

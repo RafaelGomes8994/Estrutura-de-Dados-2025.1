@@ -1,113 +1,113 @@
 #include <iostream>
 #include <string>
-#include <fstream> // NOVO: Biblioteca para manipulação de arquivos
+#include <fstream>
+#include <limits>
+#include <numeric>      // Incluído para std::accumulate
+#include <functional>   // Incluído para std::bit_xor
 
-// A função checksum permanece exatamente a mesma.
-int checksum(const std::string& texto) {
-    int chk = 0;
-    for (char c : texto) {
-        chk = chk ^ c;
-    }
-    return chk;
+/**
+ * @brief Calcula o checksum de uma string usando o algoritmo std::accumulate.
+ * @param texto A string de entrada para o cálculo.
+ * @return O valor do checksum resultante.
+ */
+long long checksum(const std::string& texto) {
+    return std::accumulate(texto.begin(), texto.end(), 0LL, std::bit_xor<long long>());
 }
 
-// NOVO: A assinatura da main foi alterada para aceitar argumentos
+/**
+ * @brief Função principal que implementa o balanceamento de carga com a lógica de saída condicional.
+ */
 int main(int argc, char* argv[]) {
-    // NOVO: Checagem do número de argumentos
-    // O programa espera 3 argumentos: ./programa <arquivo_entrada> <arquivo_saida>
+    // 1. Validação dos argumentos e abertura dos ficheiros
     if (argc != 3) {
-        // Imprime uma mensagem de erro no console se o uso for incorreto
         std::cerr << "Uso: " << argv[0] << " <arquivo_entrada> <arquivo_saida>" << std::endl;
-        return 1; // Retorna 1 para indicar um erro
-    }
-
-    // NOVO: Abre os arquivos de entrada e saída
-    std::ifstream inputFile(argv[1]); // Objeto para ler do arquivo de entrada
-    std::ofstream outputFile(argv[2]); // Objeto para escrever no arquivo de saída
-
-    // NOVO: Verifica se os arquivos foram abertos com sucesso
-    if (!inputFile.is_open()) {
-        std::cerr << "Erro: Nao foi possivel abrir o arquivo de entrada '" << argv[1] << "'" << std::endl;
         return 1;
     }
-    if (!outputFile.is_open()) {
-        std::cerr << "Erro: Nao foi possivel abrir o arquivo de saida '" << argv[2] << "'" << std::endl;
+    std::ifstream inputFile(argv[1]);
+    std::ofstream outputFile(argv[2]);
+    if (!inputFile.is_open() || !outputFile.is_open()) {
+        std::cerr << "Erro: Nao foi possivel abrir um dos ficheiros." << std::endl;
         return 1;
     }
 
+    // 2. Leitura dos parâmetros T e C
     int T, C;
-    // MODIFICADO: Lê de 'inputFile' em vez de 'std::cin'
     inputFile >> T >> C;
 
-    int N;
-    // MODIFICADO: Lê de 'inputFile' em vez de 'std::cin'
-    inputFile >> N;
-
-    int* server_load = new int[T];
+    // 3. Alocação dinâmica da memória para os servidores
+    int* server_load = new int[T]();
     std::string** server_requests = new std::string*[T];
-
     for (int i = 0; i < T; ++i) {
-        server_load[i] = 0;
         server_requests[i] = new std::string[C];
     }
 
-    for (int i = 0; i < N; ++i) {
-        int m;
-        // MODIFICADO: Lê de 'inputFile' em vez de 'std::cin'
-        inputFile >> m;
-        for (int j = 0; j < m; ++j) {
-            std::string padrao;
-            // MODIFICADO: Lê de 'inputFile' em vez de 'std::cin'
-            inputFile >> padrao;
+    // Lê e descarta o número total de requisições, pois o loop while já controla o fim do arquivo.
+    int total_requests_lines;
+    inputFile >> total_requests_lines;
+    
+    int num_parts;
+    while (inputFile >> num_parts) {
+        // Monta a string completa unindo as partes com '_'
+        std::string request_string = "";
+        std::string temp_part;
+        for (int j = 0; j < num_parts; ++j) {
+            inputFile >> temp_part;
+            request_string += (j == 0 ? "" : "_") + temp_part;
+        }
 
-            int cs = checksum(padrao);
+        // 4.1. Cálculo do checksum sobre a string já montada
+        int chk = checksum(request_string);
 
-            long long h1 = (7919LL * cs) % T;
-            long long h2 = (104729LL * cs + 123) % T;
-            if (h2 == 0) {
-                h2 = 1;
-            }
+        // 4.2. Cálculo das funções de hash H1 e H2 com as correções necessárias
+        long long h1 = (7919 * chk) % T;
+        long long h2 = (104729 * chk + 123) % T;
+        if (h2 == 0) { // Garante que a sondagem não fique presa
+            h2 = 1;
+        }
 
-            int tentativas = 0;
-            long long servidor_alocado = -1;
-            long long servidor_anterior = -1;
+        // 4.3. Procura um servidor com capacidade disponível
+        int tentativas = 0;
+        while (tentativas < T) {
+            long long servidor_atual = (h1 + ((long long)tentativas * h2)) % T;
+            
+            if (server_load[servidor_atual] < C) {
+                // LÓGICA FINAL DE FORMATAÇÃO DA SAÍDA
+                // Verifica se o servidor já tem carga ANTES de adicionar a nova requisição.
+                bool servidor_ja_usado = (server_load[servidor_atual] > 0);
 
-            while (tentativas < T) {
-                long long servidor_atual = (h1 + tentativas * h2) % T;
-                
-                if (server_load[servidor_atual] < C) {
-                    servidor_alocado = servidor_atual;
-                    
-                    if (tentativas > 0 && servidor_anterior != -1) {
-                        // MODIFICADO: Escreve em 'outputFile' em vez de 'std::cout'
-                        outputFile << "S" << servidor_anterior << "->" << "S" << servidor_alocado << std::endl;
+                // Aloca a requisição e incrementa a carga do servidor.
+                server_requests[servidor_atual][server_load[servidor_atual]] = request_string;
+                server_load[servidor_atual]++;
+
+                // Escreve no arquivo de saída usando a formatação condicional.
+                outputFile << "S" << servidor_atual << ":";
+                if (servidor_ja_usado) {
+                    // Se já foi usado, imprime a lista completa com vírgulas.
+                    for (int k = 0; k < server_load[servidor_atual]; ++k) {
+                        outputFile << (k == 0 ? "" : ",") << server_requests[servidor_atual][k];
                     }
-                    
-                    server_requests[servidor_alocado][server_load[servidor_alocado]] = padrao;
-                    server_load[servidor_alocado]++;
-
-                    // MODIFICADO: Escreve em 'outputFile' em vez de 'std::cout'
-                    outputFile << "S" << servidor_alocado << ":";
-                    for (int k = 0; k < server_load[servidor_alocado]; ++k) {
-                        outputFile << (k == 0 ? "" : ",") << server_requests[servidor_alocado][k];
-                    }
-                    outputFile << std::endl;
-                    
-                    break;
+                } else {
+                    // Se é a primeira vez, imprime apenas a requisição atual.
+                    outputFile << request_string;
                 }
+                outputFile << std::endl;
                 
-                servidor_anterior = servidor_atual;
-                tentativas++;
+                break; // Encontrou um lugar, sai do loop de tentativas.
             }
+            
+            tentativas++; // Tenta o próximo servidor na sequência de sondagem.
         }
     }
 
+    // 5. Libertação da memória alocada dinamicamente
     for (int i = 0; i < T; ++i) {
         delete[] server_requests[i];
     }
     delete[] server_requests;
     delete[] server_load;
 
-    // Os arquivos são fechados automaticamente quando 'inputFile' e 'outputFile' saem de escopo.
+    inputFile.close();
+    outputFile.close();
+
     return 0;
 }

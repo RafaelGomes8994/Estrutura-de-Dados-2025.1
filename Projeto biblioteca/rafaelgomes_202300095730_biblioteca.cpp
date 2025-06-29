@@ -4,19 +4,15 @@
 #include <fstream>
 #include <utility> // Para std::swap
 
+// Nenhuma outra biblioteca é necessária
+
 struct Livro {
     long long isbn;
     std::string autor;
     std::string titulo;
 };
 
-
-// --- Algoritmos de Ordenação Otimizados ---
-
-/**
- * @brief Insertion Sort (Ordenação por Inserção).
- * Eficiente para arrays pequenos. Usado como parte da otimização do Quicksort.
- */
+// --- Algoritmos de Ordenação Otimizados (Corretos) ---
 void insertionSort(Livro livros[], int baixo, int alto) {
     for (int p = baixo + 1; p <= alto; ++p) {
         Livro tmp = std::move(livros[p]);
@@ -28,14 +24,9 @@ void insertionSort(Livro livros[], int baixo, int alto) {
     }
 }
 
-/**
- * @brief Particiona o subarray para o Quicksort.
- * Otimizado para trabalhar com o pivô selecionado pela "Mediana de Três".
- */
 int particionar(Livro livros[], int baixo, int alto, long long pivo) {
     int i = baixo;
     int j = alto - 1;
-
     for (;;) {
         while (livros[++i].isbn < pivo) {}
         while (pivo < livros[--j].isbn) {}
@@ -45,75 +36,105 @@ int particionar(Livro livros[], int baixo, int alto, long long pivo) {
             break;
         }
     }
-    std::swap(livros[i], livros[alto - 1]); // Restaura o pivô
+    std::swap(livros[i], livros[alto - 1]);
     return i;
 }
 
-
-/**
- * @brief Função recursiva principal do Quicksort com otimizações.
- * @param livros Array a ser ordenado.
- * @param baixo Índice inicial.
- * @param alto Índice final.
- */
 void quickSortRecursivo(Livro livros[], int baixo, int alto) {
-    // Otimização 1: Usar Insertion Sort para subarrays pequenos (cutoff)
     if (alto - baixo <= 10) {
         insertionSort(livros, baixo, alto);
         return;
     }
-
-    // Otimização 2: Estratégia de pivô "Mediana de Três"
     int meio = (baixo + alto) / 2;
     if (livros[meio].isbn < livros[baixo].isbn) std::swap(livros[baixo], livros[meio]);
     if (livros[alto].isbn < livros[baixo].isbn) std::swap(livros[baixo], livros[alto]);
     if (livros[alto].isbn < livros[meio].isbn) std::swap(livros[meio], livros[alto]);
-    
-    // O pivô é o elemento do meio, que colocamos na penúltima posição
     std::swap(livros[meio], livros[alto - 1]);
     long long pivo = livros[alto - 1].isbn;
-
-    // Particiona e chama recursivamente
     int pi = particionar(livros, baixo, alto, pivo);
     quickSortRecursivo(livros, baixo, pi - 1);
     quickSortRecursivo(livros, pi + 1, alto);
 }
 
 
-// --- Algoritmos de Busca (Sem alterações, já eram robustos) ---
+// --- Algoritmos de Busca ---
+
+// --- FUNÇÃO SUBSTITUÍDA ---
+// Esta é a nova busca binária com a lógica da função 'bbi'
 int buscaBinaria(const Livro livros[], int n, long long isbn_procurado, int& chamadas) {
-    int baixo = 0, alto = n - 1;
     chamadas = 0;
-    while (baixo <= alto) {
-        chamadas++;
-        int meio = baixo + (alto - baixo) / 2;
-        if (livros[meio].isbn == isbn_procurado) return meio;
-        if (livros[meio].isbn < isbn_procurado) baixo = meio + 1;
-        else alto = meio - 1;
+    if (n == 0) {
+        return -1;
     }
-    return -1;
+
+    int baixo = 0;
+    int alto = n - 1;
+    
+    // Calcula o pivô inicial, antes do laço
+    int pivo = baixo + (alto - baixo) / 2;
+    
+    // O laço só continua se o pivô não for o alvo
+    while (alto >= baixo && livros[pivo].isbn != isbn_procurado) {
+        chamadas++; // Conta a iteração do laço
+        if (livros[pivo].isbn > isbn_procurado) {
+            alto = pivo - 1;
+        } else {
+            baixo = pivo + 1;
+        }
+        
+        // Recalcula o pivô para a próxima iteração
+        if (alto >= baixo) {
+            pivo = baixo + (alto - baixo) / 2;
+        }
+    }
+
+    // Se o laço terminou, verificamos a razão
+    if (alto < baixo) {
+        chamadas++; // Conta a última verificação que falhou
+        return -1;   // Não encontrado
+    } else {
+        chamadas++; // Conta a verificação bem-sucedida que parou o laço
+        return pivo; // Encontrado
+    }
 }
 
+
+// A busca "interpolada" que na verdade usa a heurística de módulo
 int buscaInterpolada(const Livro livros[], int n, long long isbn_procurado, int& chamadas) {
     int baixo = 0, alto = n - 1;
     chamadas = 0;
-    while (baixo <= alto && isbn_procurado >= livros[baixo].isbn && isbn_procurado <= livros[alto].isbn) {
-        chamadas++;
-        if (livros[alto].isbn == livros[baixo].isbn) {
+    while (baixo <= alto) {
+        chamadas++; // Conta a iteração do laço
+        if (baixo == alto) {
             if (livros[baixo].isbn == isbn_procurado) return baixo;
-            return -1;
+            break; 
         }
-        long long pos = baixo + (((double)(isbn_procurado - livros[baixo].isbn) * (alto - baixo)) / (livros[alto].isbn - livros[baixo].isbn));
-        if (pos < baixo || pos > alto) break;
-        if (livros[pos].isbn == isbn_procurado) return pos;
-        if (livros[pos].isbn < isbn_procurado) baixo = pos + 1;
-        else alto = pos - 1;
+
+        int tamanho_intervalo = alto - baixo + 1;
+        long long pos = baixo + ((livros[alto].isbn - livros[baixo].isbn) % tamanho_intervalo);
+        
+        if (pos > alto) {
+            pos = alto;
+        }
+        if (pos < baixo) {
+            pos = baixo;
+        }
+
+        if (livros[pos].isbn == isbn_procurado) {
+            return pos;
+        }
+        
+        if (livros[pos].isbn < isbn_procurado) {
+            baixo = pos + 1;
+        } else {
+            alto = pos - 1;
+        }
     }
     return -1;
 }
 
 
-// --- Função Principal (main) (Sem alterações na lógica principal) ---
+// --- Função Principal ---
 int main(int argc, char* argv[]) {
     if (argc != 3) {
         std::cerr << "Uso: " << argv[0] << " <arquivo_de_entrada> <arquivo_de_saida>" << std::endl;
@@ -139,13 +160,19 @@ int main(int argc, char* argv[]) {
         std::getline(arquivo_entrada, linha);
         std::stringstream ss(linha);
         std::string isbn_str;
-        std::getline(ss, isbn_str, '&');
-        std::getline(ss, livros[i].autor, '&');
-        std::getline(ss, livros[i].titulo);
+        ss >> isbn_str;
         livros[i].isbn = std::stoll(isbn_str);
+        std::string resto;
+        std::getline(ss, resto);
+        size_t pos_ampersand = resto.find('&');
+        if (pos_ampersand != std::string::npos) {
+            livros[i].autor = resto.substr(1, pos_ampersand - 1);
+            livros[i].titulo = resto.substr(pos_ampersand + 1);
+        }
+        for (char &c : livros[i].autor) { if (c == ' ') c = '_'; }
+        for (char &c : livros[i].titulo) { if (c == ' ') c = '_'; }
     }
 
-    // Chama a função de ordenação otimizada
     if (n_livros > 1) {
         quickSortRecursivo(livros, 0, n_livros - 1);
     }
@@ -154,7 +181,7 @@ int main(int argc, char* argv[]) {
     arquivo_entrada >> n_consultas;
     
     int vitorias_binaria = 0, vitorias_interpolacao = 0;
-    int total_chamadas_binaria = 0, total_chamadas_interpolacao = 0;
+    long long total_chamadas_binaria = 0, total_chamadas_interpolacao = 0;
 
     for (int i = 0; i < n_consultas; ++i) {
         long long isbn_consulta;
@@ -163,14 +190,18 @@ int main(int argc, char* argv[]) {
         int chamadas_b, chamadas_i;
         int indice_b = buscaBinaria(livros, n_livros, isbn_consulta, chamadas_b);
         buscaInterpolada(livros, n_livros, isbn_consulta, chamadas_i);
-        
+
         total_chamadas_binaria += chamadas_b;
         total_chamadas_interpolacao += chamadas_i;
 
-        if (chamadas_b < chamadas_i) vitorias_binaria++;
-        else vitorias_interpolacao++;
+        // A lógica de vitória que o seu código mais recente usava
+        if (chamadas_b < chamadas_i) {
+            vitorias_binaria++;
+        } else if (chamadas_i <= chamadas_b) {
+            vitorias_interpolacao++;
+        }
 
-        arquivo_saida << "[" << isbn_consulta << "] B=" << chamadas_b << "|I=" << chamadas_i << "|";
+        arquivo_saida << "[" << isbn_consulta << "]B=" << chamadas_b << "|I=" << chamadas_i << "|";
         if (indice_b != -1) {
             arquivo_saida << "Author:" << livros[indice_b].autor << ",Title:" << livros[indice_b].titulo << "\n";
         } else {
