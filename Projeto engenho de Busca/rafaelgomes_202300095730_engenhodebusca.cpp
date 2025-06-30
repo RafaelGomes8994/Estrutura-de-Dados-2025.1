@@ -57,9 +57,18 @@ int main(int argc, char* argv[]) {
         std::string full_request_for_print = "";
         uint8_t accumulated_checksum = 0;
 
+        // *** AQUI ESTÁ A CORREÇÃO ***
+        // Loop para ler as 'm' partes da requisição
         for (int j = 0; j < m; ++j) {
             inputFile >> request_part;
+            
+            // Adiciona o underscore ANTES da parte, exceto na primeira (j=0)
+            if (j > 0) {
+                full_request_for_print += "_";
+            }
             full_request_for_print += request_part;
+
+            // O checksum continua sendo calculado por parte, como no enunciado
             accumulated_checksum ^= checksum(request_part);
         }
 
@@ -89,15 +98,9 @@ int main(int argc, char* argv[]) {
                 break;
 
             } else {
-                // COLISÃO: O servidor está cheio.
-                
-                // *** ESTA É A ALTERAÇÃO PRINCIPAL ***
-                // Apenas registramos o servidor que colidiu na primeira tentativa.
-                // Não imprimimos mais o seu estado aqui.
                 if (attempts == 0) {
                     first_collided_server = current_server;
                 }
-                
                 attempts++;
             }
         }
