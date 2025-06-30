@@ -66,6 +66,7 @@ void heapify_down(NoHeap heap[], int tamanho, int i) {
     }
 }
 
+// Constrói o heap a partir de um array qualquer
 void construirHeap(NoHeap heap[], int tamanho) {
     for (int i = tamanho / 2 - 1; i >= 0; i--) {
         heapify_down(heap, tamanho, i);
@@ -112,13 +113,31 @@ void mergeSort(Documento array[], int const inicio, int const fim) {
 }
 
 
-// --- FUNÇÃO PRINCIPAL OTIMIZADA ---
-int main() {
+// --- FUNÇÃO PRINCIPAL MODIFICADA ---
+int main(int argc, char* argv[]) {
+    // Verifica se os argumentos de linha de comando foram passados corretamente
+    if (argc != 3) {
+        std::cerr << "Erro: Uso incorreto." << std::endl;
+        std::cerr << "Uso: " << argv[0] << " <arquivo_de_entrada> <arquivo_de_saida>" << std::endl;
+        return 1; // Retorna um código de erro
+    }
+
+    // Usa os argumentos para abrir os arquivos
+    std::ifstream arquivo_entrada(argv[1]);
+    std::ofstream arquivo_saida(argv[2]);
+
+    // Otimização de I/O
     std::ios_base::sync_with_stdio(false);
-    std::ifstream::sync_with_stdio(false);
-    std::ifstream arquivo_entrada("Entrada_de_Bruno.txt");
-    std::ofstream arquivo_saida("sistemadeimpressaoMEU.txt");
     arquivo_entrada.tie(NULL);
+
+    if (!arquivo_entrada.is_open()) {
+        std::cerr << "Erro ao abrir o arquivo de entrada: " << argv[1] << std::endl;
+        return 1;
+    }
+    if (!arquivo_saida.is_open()) {
+        std::cerr << "Erro ao abrir o arquivo de saida: " << argv[2] << std::endl;
+        return 1;
+    }
 
     int qtd_impressoras;
     arquivo_entrada >> qtd_impressoras;
@@ -154,7 +173,9 @@ int main() {
     for(int i = 0; i < qtd_impressoras; ++i) {
         heap_impressoras[i] = {0, i};
     }
-    // Não precisa construir o heap com construirHeap, pois já está ordenado
+    
+    // CORREÇÃO DO SEGFAULT: Constrói o heap corretamente antes de usar.
+    construirHeap(heap_impressoras, qtd_impressoras);
     
     for (int i = 0; i < qtd_documentos; ++i) {
         Documento* doc_para_imprimir = &todos_documentos[i];
