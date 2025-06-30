@@ -1,111 +1,117 @@
 #include <iostream>
 #include <string>
 #include <fstream>
+#include <cstdint>
+#include <numeric>
 
-// Função para calcular o checksum de uma string usando XOR
-int checksum(const std::string& texto) {
-    int chk = 0;
+// --- NÃO MEXER NESTA FUNÇÃO ---
+uint8_t checksum(const std::string& texto) {
+    uint8_t resultado = 0;
     for (char c : texto) {
-        chk = chk ^ c;
+        resultado ^= static_cast<uint8_t>(c);
     }
-    return chk;
+    return resultado;
+}
+
+// --- NÃO MEXER NESTA FUNÇÃO ---
+void print_server_state(std::ofstream& outputFile, int server_id, int load, const std::string* requests) {
+    outputFile << "S" << server_id << ":";
+    for (int k = 0; k < load; ++k) {
+        outputFile << (k == 0 ? "" : ",") << requests[k];
+    }
+    outputFile << std::endl;
 }
 
 int main(int argc, char* argv[]) {
-    // Verifica se os argumentos de entrada estão corretos
     if (argc != 3) {
         std::cerr << "Uso: " << argv[0] << " <arquivo_entrada> <arquivo_saida>" << std::endl;
         return 1;
     }
 
     std::ifstream inputFile(argv[1]);
-    std::ofstream outputFile(argv[2]);
-
-    // Verifica se os arquivos foram abertos corretamente
     if (!inputFile.is_open()) {
-        std::cerr << "Erro: Nao foi possivel abrir o arquivo de entrada '" << argv[1] << "'" << std::endl;
+        std::cerr << "Erro ao abrir o arquivo de entrada: " << argv[1] << std::endl;
         return 1;
     }
+
+    std::ofstream outputFile(argv[2]);
     if (!outputFile.is_open()) {
-        std::cerr << "Erro: Nao foi possivel abrir o arquivo de saida '" << argv[2] << "'" << std::endl;
+        std::cerr << "Erro ao abrir o arquivo de saida: " << argv[2] << std::endl;
         return 1;
     }
 
-    int T, C;
-    inputFile >> T >> C; // Lê o número de servidores (T) e a capacidade de cada servidor (C)
+    int T, C, N;
+    inputFile >> T >> C >> N;
 
-    int N;
-    inputFile >> N; // Lê o número de conjuntos de padrões
-
-    // Aloca arrays para controlar a carga e os pedidos de cada servidor
-    int* server_load = new int[T];
+    int* server_load = new int[T]();
     std::string** server_requests = new std::string*[T];
-
     for (int i = 0; i < T; ++i) {
-        server_load[i] = 0; // Inicializa a carga de cada servidor
-        server_requests[i] = new std::string[C]; // Inicializa o array de pedidos de cada servidor
+        server_requests[i] = new std::string[C];
     }
 
-    // Processa cada conjunto de padrões
     for (int i = 0; i < N; ++i) {
         int m;
-        inputFile >> m; // Lê a quantidade de padrões no conjunto
+        inputFile >> m;
+
+        std::string request_part;
+        std::string full_request_for_print = "";
+        uint8_t accumulated_checksum = 0;
+
         for (int j = 0; j < m; ++j) {
-            std::string padrao;
-            inputFile >> padrao; // Lê o padrão
+            inputFile >> request_part;
+            full_request_for_print += request_part;
+            accumulated_checksum ^= checksum(request_part);
+        }
 
-            int cs = checksum(padrao); // Calcula o checksum do padrão
+        uint8_t final_checksum = accumulated_checksum;
+        long long h1 = (7919LL * final_checksum) % T;
+        long long h2 = (104729LL * final_checksum + 123) % T;
+        if (h2 == 0) {
+            h2 = 1;
+        }
 
-            // Calcula os hashes para determinar o servidor inicial e o incremento
-            long long h1 = (7919LL * cs) % T;
-            long long h2 = (104729LL * cs + 123) % T;
-            if (h2 == 0) {
-                h2 = 1;
-            }
+        int attempts = 0;
+        int first_collided_server = -1;
 
-            int tentativas = 0;
-            long long servidor_alocado = -1;
-            long long servidor_anterior = -1;
+        while (attempts < T) {
+            int current_server = (h1 + (long long)attempts * h2) % T;
 
-            // Tenta alocar o padrão em um servidor usando double hashing
-            while (tentativas < T) {
-                long long servidor_atual = (h1 + tentativas * h2) % T;
+            if (server_load[current_server] < C) {
+                if (first_collided_server != -1) {
+                    outputFile << "S" << first_collided_server << "->S" << current_server << std::endl;
+                }
+
+                server_requests[current_server][server_load[current_server]] = full_request_for_print;
+                server_load[current_server]++;
+
+                print_server_state(outputFile, current_server, server_load[current_server], server_requests[current_server]);
                 
-                // Verifica se o servidor tem capacidade disponível
-                if (server_load[servidor_atual] < C) {
-                    servidor_alocado = servidor_atual;
-                    
-                    // Se não for a primeira tentativa, registra a transferência
-                    if (tentativas > 0 && servidor_anterior != -1) {
-                        outputFile << "S" << servidor_anterior << "->" << "S" << servidor_alocado << std::endl;
-                    }
-                    
-                    // Adiciona o padrão ao servidor e incrementa a carga
-                    server_requests[servidor_alocado][server_load[servidor_alocado]] = padrao;
-                    server_load[servidor_alocado]++;
+                break;
 
-                    // Escreve o estado atual do servidor no arquivo de saída
-                    outputFile << "S" << servidor_alocado << ":";
-                    for (int k = 0; k < server_load[servidor_alocado]; ++k) {
-                        outputFile << (k == 0 ? "" : ",") << server_requests[servidor_alocado][k];
-                    }
-                    outputFile << std::endl;
-                    
-                    break;
+            } else {
+                // COLISÃO: O servidor está cheio.
+                
+                // *** ESTA É A ALTERAÇÃO PRINCIPAL ***
+                // Apenas registramos o servidor que colidiu na primeira tentativa.
+                // Não imprimimos mais o seu estado aqui.
+                if (attempts == 0) {
+                    first_collided_server = current_server;
                 }
                 
-                servidor_anterior = servidor_atual;
-                tentativas++;
+                attempts++;
             }
         }
     }
 
-    // Libera a memória alocada
+    // Liberação de memória
     for (int i = 0; i < T; ++i) {
         delete[] server_requests[i];
     }
     delete[] server_requests;
     delete[] server_load;
+
+    inputFile.close();
+    outputFile.close();
 
     return 0;
 }

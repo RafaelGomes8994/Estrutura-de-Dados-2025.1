@@ -1,105 +1,109 @@
 #include <iostream>
 #include <string>
 #include <fstream>
-#include <limits>
-#include <numeric>      // Incluído para std::accumulate
-#include <functional>   // Incluído para std::bit_xor
+#include <cstdint>
+#include <numeric>
 
-/**
- * @brief Calcula o checksum de uma string usando o algoritmo std::accumulate.
- * @param texto A string de entrada para o cálculo.
- * @return O valor do checksum resultante.
- */
-long long checksum(const std::string& texto) {
-    return std::accumulate(texto.begin(), texto.end(), 0LL, std::bit_xor<long long>());
+// --- NÃO MEXER NESTA FUNÇÃO ---
+uint8_t checksum(const std::string& texto) {
+    uint8_t resultado = 0;
+    for (char c : texto) {
+        resultado ^= static_cast<uint8_t>(c);
+    }
+    return resultado;
 }
 
-/**
- * @brief Função principal que implementa o balanceamento de carga com a lógica de saída condicional.
- */
+// --- NÃO MEXER NESTA FUNÇÃO ---
+void print_server_state(std::ofstream& outputFile, int server_id, int load, const std::string* requests) {
+    outputFile << "S" << server_id << ":";
+    for (int k = 0; k < load; ++k) {
+        outputFile << (k == 0 ? "" : ",") << requests[k];
+    }
+    outputFile << std::endl;
+}
+
 int main(int argc, char* argv[]) {
-    // 1. Validação dos argumentos e abertura dos ficheiros
     if (argc != 3) {
         std::cerr << "Uso: " << argv[0] << " <arquivo_entrada> <arquivo_saida>" << std::endl;
         return 1;
     }
+
     std::ifstream inputFile(argv[1]);
-    std::ofstream outputFile(argv[2]);
-    if (!inputFile.is_open() || !outputFile.is_open()) {
-        std::cerr << "Erro: Nao foi possivel abrir um dos ficheiros." << std::endl;
+    if (!inputFile.is_open()) {
+        std::cerr << "Erro ao abrir o arquivo de entrada: " << argv[1] << std::endl;
         return 1;
     }
 
-    // 2. Leitura dos parâmetros T e C
-    int T, C;
-    inputFile >> T >> C;
+    std::ofstream outputFile(argv[2]);
+    if (!outputFile.is_open()) {
+        std::cerr << "Erro ao abrir o arquivo de saida: " << argv[2] << std::endl;
+        return 1;
+    }
 
-    // 3. Alocação dinâmica da memória para os servidores
+    int T, C, N;
+    inputFile >> T >> C >> N;
+
     int* server_load = new int[T]();
     std::string** server_requests = new std::string*[T];
     for (int i = 0; i < T; ++i) {
         server_requests[i] = new std::string[C];
     }
 
-    // Lê e descarta o número total de requisições, pois o loop while já controla o fim do arquivo.
-    int total_requests_lines;
-    inputFile >> total_requests_lines;
-    
-    int num_parts;
-    while (inputFile >> num_parts) {
-        // Monta a string completa unindo as partes com '_'
-        std::string request_string = "";
-        std::string temp_part;
-        for (int j = 0; j < num_parts; ++j) {
-            inputFile >> temp_part;
-            request_string += (j == 0 ? "" : "_") + temp_part;
+    for (int i = 0; i < N; ++i) {
+        int m;
+        inputFile >> m;
+
+        std::string request_part;
+        std::string full_request_for_print = "";
+        uint8_t accumulated_checksum = 0;
+
+        for (int j = 0; j < m; ++j) {
+            inputFile >> request_part;
+            full_request_for_print += request_part;
+            accumulated_checksum ^= checksum(request_part);
         }
 
-        // 4.1. Cálculo do checksum sobre a string já montada
-        int chk = checksum(request_string);
-
-        // 4.2. Cálculo das funções de hash H1 e H2 com as correções necessárias
-        long long h1 = (7919 * chk) % T;
-        long long h2 = (104729 * chk + 123) % T;
-        if (h2 == 0) { // Garante que a sondagem não fique presa
+        uint8_t final_checksum = accumulated_checksum;
+        long long h1 = (7919LL * final_checksum) % T;
+        long long h2 = (104729LL * final_checksum + 123) % T;
+        if (h2 == 0) {
             h2 = 1;
         }
 
-        // 4.3. Procura um servidor com capacidade disponível
-        int tentativas = 0;
-        while (tentativas < T) {
-            long long servidor_atual = (h1 + ((long long)tentativas * h2)) % T;
-            
-            if (server_load[servidor_atual] < C) {
-                // LÓGICA FINAL DE FORMATAÇÃO DA SAÍDA
-                // Verifica se o servidor já tem carga ANTES de adicionar a nova requisição.
-                bool servidor_ja_usado = (server_load[servidor_atual] > 0);
+        int attempts = 0;
+        int first_collided_server = -1;
 
-                // Aloca a requisição e incrementa a carga do servidor.
-                server_requests[servidor_atual][server_load[servidor_atual]] = request_string;
-                server_load[servidor_atual]++;
+        while (attempts < T) {
+            int current_server = (h1 + (long long)attempts * h2) % T;
 
-                // Escreve no arquivo de saída usando a formatação condicional.
-                outputFile << "S" << servidor_atual << ":";
-                if (servidor_ja_usado) {
-                    // Se já foi usado, imprime a lista completa com vírgulas.
-                    for (int k = 0; k < server_load[servidor_atual]; ++k) {
-                        outputFile << (k == 0 ? "" : ",") << server_requests[servidor_atual][k];
-                    }
-                } else {
-                    // Se é a primeira vez, imprime apenas a requisição atual.
-                    outputFile << request_string;
+            if (server_load[current_server] < C) {
+                if (first_collided_server != -1) {
+                    outputFile << "S" << first_collided_server << "->S" << current_server << std::endl;
                 }
-                outputFile << std::endl;
+
+                server_requests[current_server][server_load[current_server]] = full_request_for_print;
+                server_load[current_server]++;
+
+                print_server_state(outputFile, current_server, server_load[current_server], server_requests[current_server]);
                 
-                break; // Encontrou um lugar, sai do loop de tentativas.
+                break;
+
+            } else {
+                // COLISÃO: O servidor está cheio.
+                
+                // *** ESTA É A ALTERAÇÃO PRINCIPAL ***
+                // Apenas registramos o servidor que colidiu na primeira tentativa.
+                // Não imprimimos mais o seu estado aqui.
+                if (attempts == 0) {
+                    first_collided_server = current_server;
+                }
+                
+                attempts++;
             }
-            
-            tentativas++; // Tenta o próximo servidor na sequência de sondagem.
         }
     }
 
-    // 5. Libertação da memória alocada dinamicamente
+    // Liberação de memória
     for (int i = 0; i < T; ++i) {
         delete[] server_requests[i];
     }
