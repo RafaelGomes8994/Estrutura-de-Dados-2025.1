@@ -1,0 +1,15 @@
+[EPD]
+3:documento.doc|rw|64732_bytes
+2:foto.jpg|rw|8374719_bytes
+4:lista_ed.c|ro|1_byte
+1:senhas.txt|ro|144_bytes
+[PED]
+4:lista_ed.c|ro|1_byte
+2:foto.jpg|rw|8374719_bytes
+3:documento.doc|rw|64732_bytes
+1:senhas.txt|ro|144_bytes
+[EDP]
+3:documento.doc|rw|64732_bytes
+2:foto.jpg|rw|8374719_bytes
+1:senhas.txt|ro|144_bytes
+4:lista_ed.c|ro|1_byte
