@@ -151,7 +151,10 @@ int main(int argc, char *argv[]) {
     std::getline(inputFile, linha);
     ordem_entrada = std::stoi(linha);
     
-    int grau_minimo_t = 2;
+    int grau_minimo_t = ordem_entrada - 1;
+    if (grau_minimo_t < 2) {
+        grau_minimo_t = 2;
+    }
     ArvoreB arvore(grau_minimo_t);
 
     std::getline(inputFile, linha);
@@ -169,9 +172,12 @@ int main(int argc, char *argv[]) {
     std::getline(inputFile, linha);
     nOperacoes = std::stoi(linha);
 
+    bool primeiraSaida = true; // Flag para controlar a primeira escrita no arquivo
+
     for (int i = 0; i < nOperacoes; ++i) {
         std::getline(inputFile, linha);
         if (linha.empty()) continue;
+        
         std::stringstream ss(linha);
         std::string operacao;
         ss >> operacao;
@@ -181,6 +187,12 @@ int main(int argc, char *argv[]) {
             ss >> arq.nome >> arq.tamanho >> arq.hash;
             arvore.insert(arq);
         } else if (operacao == "SELECT") {
+            // Se não for a primeira vez que escrevemos no arquivo,
+            // adiciona uma quebra de linha ANTES.
+            if (!primeiraSaida) {
+                outputFile << "\n";
+            }
+
             std::string hashBusca;
             ss >> hashBusca;
             
@@ -197,15 +209,9 @@ int main(int argc, char *argv[]) {
                     }
                 }
             } else {
-                // #######################################################
-                // ## AJUSTE FINAL: Imprime o hífen para busca sem sucesso.
-                // #######################################################
                 outputFile << "-";
             }
-        }
-        
-        if (i < nOperacoes - 1) {
-            outputFile << "\n";
+            primeiraSaida = false; // Marca que já escrevemos no arquivo.
         }
     }
 
