@@ -35,7 +35,7 @@ struct No {
     }
 };
 
-// --- CLASSE DA ÁRVORE B+ (lógica de inserção e split correta) ---
+// --- CLASSE DA ÁRVORE B+ ---
 class ArvoreBmais {
 private:
     No *raiz;
@@ -63,9 +63,12 @@ private:
             pai->n++;
             novo_no->pai = pai;
         } else {
-            std::string temp_C[k]; No* temp_P[k + 1];
+            // ALTERAÇÃO: Alocação dinâmica para remover warning
+            std::string* temp_C = new std::string[k]; 
+            void** temp_P = new void*[k + 1];
+
             for (int i=0; i<k-1; i++) temp_C[i] = pai->C[i];
-            for (int i=0; i<k; i++) temp_P[i] = (No*)pai->P[i];
+            for (int i=0; i<k; i++) temp_P[i] = pai->P[i];
             int i=0;
             while(i < k-1 && chave > temp_C[i]) i++;
             for(int j=k-1; j>i; j--) temp_C[j] = temp_C[j-1];
@@ -83,6 +86,11 @@ private:
                 novo_pai->C[j] = temp_C[j+meio+1];
             }
             novo_pai->P[novo_pai->n] = temp_P[k]; ((No*)novo_pai->P[novo_pai->n])->pai = novo_pai;
+            
+            // ALTERAÇÃO: Liberação da memória
+            delete[] temp_C;
+            delete[] temp_P;
+
             inserir_no_pai(pai, chave_promovida, novo_pai);
         }
     }
@@ -111,7 +119,10 @@ public:
             folha->n++;
         } else {
             No* nova_folha = new No(k, true);
-            std::string temp_C[k]; void* temp_P[k];
+            // ALTERAÇÃO: Alocação dinâmica para remover warning
+            std::string* temp_C = new std::string[k]; 
+            void** temp_P = new void*[k];
+
             for(int i=0; i<k-1; i++) { temp_C[i] = folha->C[i]; temp_P[i] = folha->P[i]; }
             int i=0;
             while(i < k-1 && arquivo->hash > temp_C[i]) i++;
@@ -123,6 +134,11 @@ public:
             for(i=0; i<nova_folha->n; i++) { nova_folha->C[i] = temp_C[i+meio]; nova_folha->P[i] = temp_P[i+meio]; }
             nova_folha->prox = folha->prox;
             folha->prox = nova_folha;
+
+            // ALTERAÇÃO: Liberação da memória
+            delete[] temp_C;
+            delete[] temp_P;
+
             inserir_no_pai(folha, nova_folha->C[0], nova_folha);
         }
     }
@@ -137,13 +153,10 @@ public:
         return folha;
     }
 
-    // CORREÇÃO: Implementa a regra não-padrão de imprimir o nó inteiro
     bool buscar_exata(std::string hash, std::ofstream& outfile) {
         outfile << "[" << hash << "]\n"; 
-
         No* folha = buscar_no_folha(hash);
         if (!folha) return false;
-
         bool encontrado = false;
         for (int i = 0; i < folha->n; i++) {
             if (folha->C[i] == hash) {
@@ -151,7 +164,6 @@ public:
                 break;
             }
         }
-
         if (encontrado) {
              for (int i = 0; i < folha->n; i++) {
                 Arquivo* resultado = (Arquivo*)folha->P[i];
@@ -161,36 +173,38 @@ public:
         return encontrado;
     }
 
-    // CORREÇÃO: Implementa a regra não-padrão para o nó inicial do RANGE
     void buscar_intervalo(std::string hash_inicio, std::string hash_fim, std::ofstream& outfile) {
         outfile << "[" << hash_inicio << "," << hash_fim << "]\n";
-    
         No* folha_atual = buscar_no_folha(hash_inicio);
         if(!folha_atual) return;
 
-        bool primeiro_no = true;
         while (folha_atual != nullptr) {
+            if (folha_atual->n > 0 && folha_atual->C[0] > hash_fim) break;
+            bool no_e_relevante = false;
             for (int i = 0; i < folha_atual->n; i++) {
-                if (folha_atual->C[i] > hash_fim) return; 
-                
-                if (primeiro_no || folha_atual->C[i] >= hash_inicio) {
+                if (folha_atual->C[i] >= hash_inicio && folha_atual->C[i] <= hash_fim) {
+                    no_e_relevante = true;
+                    break;
+                }
+            }
+            if(no_e_relevante) {
+                for (int i = 0; i < folha_atual->n; i++) {
                     Arquivo* arq = (Arquivo*)folha_atual->P[i];
                     outfile << arq->nome << ":size=" << arq->tamanho << ",hash=" << arq->hash << "\n";
                 }
             }
-            primeiro_no = false;
             folha_atual = folha_atual->prox;
         }
     }
 };
 
-// --- FUNÇÃO MAIN COM FORMATAÇÃO FINAL CORRETA ---
+// --- FUNÇÃO MAIN COM A LÓGICA FINAL DO SEPARADOR ---
 int main(int argc, char* argv[]) {
     if (argc != 3) { return 1; }
 
     std::ifstream infile(argv[1]);
     std::ofstream outfile(argv[2]);
-
+    
     int ordem_arvore; infile >> ordem_arvore;
     ArvoreBmais arvore(ordem_arvore);
 
@@ -199,7 +213,9 @@ int main(int argc, char* argv[]) {
     int proximo_arquivo_idx = 0;
 
     for (int i = 0; i < num_arquivos; ++i) {
-        infile >> pool_de_arquivos[proximo_arquivo_idx].nome >> pool_de_arquivos[proximo_arquivo_idx].tamanho >> pool_de_arquivos[proximo_arquivo_idx].hash;
+        infile >> pool_de_arquivos[proximo_arquivo_idx].nome 
+               >> pool_de_arquivos[proximo_arquivo_idx].tamanho 
+               >> pool_de_arquivos[proximo_arquivo_idx].hash;
         arvore.inserir(&pool_de_arquivos[proximo_arquivo_idx]);
         proximo_arquivo_idx++;
     }
@@ -215,22 +231,24 @@ int main(int argc, char* argv[]) {
         std::string operacao; ss >> operacao;
 
         if (operacao == "INSERT") {
-            ss >> pool_de_arquivos[proximo_arquivo_idx].nome >> pool_de_arquivos[proximo_arquivo_idx].tamanho >> pool_de_arquivos[proximo_arquivo_idx].hash;
+            ss >> pool_de_arquivos[proximo_arquivo_idx].nome 
+               >> pool_de_arquivos[proximo_arquivo_idx].tamanho 
+               >> pool_de_arquivos[proximo_arquivo_idx].hash;
             arvore.inserir(&pool_de_arquivos[proximo_arquivo_idx]);
         } else if (operacao == "SELECT") {
             std::string token1; ss >> token1;
-            bool imprimiu_resultado = false;
             if (token1 == "RANGE") {
                 std::string hash1, hash2;
                 ss >> hash1 >> hash2;
                 arvore.buscar_intervalo(hash1, hash2, outfile);
-                imprimiu_resultado = true;
+                if (i < num_operacoes - 1) {
+                    outfile << "-\n";
+                }
             } else {
-                imprimiu_resultado = arvore.buscar_exata(token1, outfile);
-            }
-            
-            if (imprimiu_resultado && i < num_operacoes - 1) {
-                 outfile << "-\n";
+                bool encontrado = arvore.buscar_exata(token1, outfile);
+                if (!encontrado && i < num_operacoes - 1) {
+                    outfile << "-\n";
+                }
             }
         }
     }

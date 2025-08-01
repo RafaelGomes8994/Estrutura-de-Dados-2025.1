@@ -1,141 +1,175 @@
 #include <iostream>
-#include <string>
 #include <fstream>
-#include <cstdint>
+#include <string>
+
+using namespace std;
 
 struct No {
-    int numero;
-    std::string nome;
-    std::string permissao;
-    uint64_t tamanho;
+    int id;
+    string nome;
+    string tipo;
+    int tamanho;
     No* esquerda;
     No* direita;
 
-    No(int num, std::string n, std::string p, uint64_t t) {
-        this->numero = num;
-        this->nome = n;
-        this->permissao = p;
-        this->tamanho = t;
+    No(int id, string nome, string tipo, int tamanho) {
+        this->id = id;
+        this->nome = nome;
+        this->tipo = tipo;
+        this->tamanho = tamanho;
         this->esquerda = nullptr;
         this->direita = nullptr;
     }
 };
 
-class ArvoreBinariaBusca {
+class Arvore {
 private:
     No* raiz;
-    int proximoNumero;
+    int proximo_id;
 
-    No* inserirAux(No* no, int numero, const std::string& nome, const std::string& permissao, uint64_t tamanho) {
-        if (no == nullptr) {
-            return new No(numero, nome, permissao, tamanho);
-        }
-        if (nome < no->nome) {
-            no->esquerda = inserirAux(no->esquerda, numero, nome, permissao, tamanho);
-        } else if (nome > no->nome) {
-            no->direita = inserirAux(no->direita, numero, nome, permissao, tamanho);
-        }
-        return no;
-    }
-
-    No* buscarAux(No* no, const std::string& nome) {
-        if (no == nullptr || no->nome == nome) return no;
-        if (nome < no->nome) return buscarAux(no->esquerda, nome);
-        return buscarAux(no->direita, nome);
-    }
-    
-    void reajustarNumeros(No* no, int numeroLiberado) {
-        if (no == nullptr) return;
-        if (no->numero > numeroLiberado) {
-            no->numero--;
-        }
-        reajustarNumeros(no->esquerda, numeroLiberado);
-        reajustarNumeros(no->direita, numeroLiberado);
-    }
-    
-    void emOrdem(No* no, std::ostream& out) {
-        if (!no) return;
-        emOrdem(no->esquerda, out);
-        out << no->numero << ":" << no->nome << "|" << no->permissao << "|" << no->tamanho << (no->tamanho == 1 ? "_byte" : "_bytes") << std::endl;
-        emOrdem(no->direita, out);
-    }
-    void preOrdem(No* no, std::ostream& out) {
-        if (!no) return;
-        out << no->numero << ":" << no->nome << "|" << no->permissao << "|" << no->tamanho << (no->tamanho == 1 ? "_byte" : "_bytes") << std::endl;
-        preOrdem(no->esquerda, out);
-        preOrdem(no->direita, out);
-    }
-    void posOrdem(No* no, std::ostream& out) {
-        if (!no) return;
-        posOrdem(no->esquerda, out);
-        posOrdem(no->direita, out);
-        out << no->numero << ":" << no->nome << "|" << no->permissao << "|" << no->tamanho << (no->tamanho == 1 ? "_byte" : "_bytes") << std::endl;
-    }
-    
-    void destruir(No* no) {
+    void destruir_no(No* no) {
         if (no) {
-            destruir(no->esquerda);
-            destruir(no->direita);
+            destruir_no(no->esquerda);
+            destruir_no(no->direita);
             delete no;
         }
     }
 
-public:
-    ArvoreBinariaBusca() : raiz(nullptr), proximoNumero(1) {}
-    ~ArvoreBinariaBusca() { destruir(raiz); }
-    
-    void inserir(const std::string& nome, const std::string& permissao, uint64_t tamanho) {
-        No* existente = buscarAux(this->raiz, nome);
-
-        if (existente && existente->permissao == "rw") {
-            int numeroLiberado = existente->numero;
-            
-            existente->permissao = permissao;
-            existente->tamanho = tamanho;
-
-            reajustarNumeros(this->raiz, numeroLiberado);
-            
-            existente->numero = this->proximoNumero - 1;
-
-        } else if (!existente) {
-            this->raiz = inserirAux(this->raiz, this->proximoNumero++, nome, permissao, tamanho);
+    No* inserir_no(No* no, int id, string nome, string tipo, int tamanho) {
+        if (no == nullptr) {
+            return new No(id, nome, tipo, tamanho);
         }
+        if (nome < no->nome) {
+            no->esquerda = inserir_no(no->esquerda, id, nome, tipo, tamanho);
+        } else {
+            no->direita = inserir_no(no->direita, id, nome, tipo, tamanho);
+        }
+        return no;
+    }
+
+    No* buscar(No* no, string nome) {
+        if (no == nullptr || no->nome == nome) {
+            return no;
+        }
+        if (nome < no->nome) {
+            return buscar(no->esquerda, nome);
+        }
+        return buscar(no->direita, nome);
+    }
+
+    void atualizar_id(No* no, int id_removido) {
+        if (no == nullptr) return;
+        if (no->id > id_removido) {
+            no->id--;
+        }
+        atualizar_id(no->esquerda, id_removido);
+        atualizar_id(no->direita, id_removido);
+    }
+
+    void em_ordem(No* no, ostream& out) {
+        if (no == nullptr) return;
+        em_ordem(no->esquerda, out);
+        out << no->id << ":" << no->nome << "|" << no->tipo << "|" << no->tamanho << (no->tamanho == 1 ? "_byte" : "_bytes") << endl;
+        em_ordem(no->direita, out);
+    }
+
+    void pre_ordem(No* no, ostream& out) {
+        if (no == nullptr) return;
+        out << no->id << ":" << no->nome << "|" << no->tipo << "|" << no->tamanho << (no->tamanho == 1 ? "_byte" : "_bytes") << endl;
+        pre_ordem(no->esquerda, out);
+        pre_ordem(no->direita, out);
     }
     
-    void imprimirEmOrdem(std::ostream& out) { out << "[EPD]" << std::endl; emOrdem(this->raiz, out); }
-    void imprimirPreOrdem(std::ostream& out) { out << "[PED]" << std::endl; preOrdem(this->raiz, out); }
-    void imprimirPosOrdem(std::ostream& out) { out << "[EDP]" << std::endl; posOrdem(this->raiz, out); }
+    void pos_ordem(No* no, ostream& out) {
+        if (no == nullptr) return;
+        pos_ordem(no->esquerda, out);
+        pos_ordem(no->direita, out);
+        out << no->id << ":" << no->nome << "|" << no->tipo << "|" << no->tamanho << (no->tamanho == 1 ? "_byte" : "_bytes") << endl;
+    }
+
+public:
+    // CORREÇÃO 1: Garantir que o contador de ID começa em 0.
+    Arvore() : raiz(nullptr), proximo_id(0) {}
+    
+    ~Arvore() {
+        destruir_no(this->raiz);
+    }
+
+// Esta é a lógica correta que deve estar no seu método inserir
+void inserir(string nome, string tipo, int tamanho) {
+    No* no = buscar(this->raiz, nome);
+
+    // Este bloco IF é o que executa a lógica correta de atualização
+    if (no != nullptr && no->tipo == "rw") {
+        int id_antigo = no->id;
+        
+        // 1. Atualiza os dados no lugar
+        no->tipo = tipo;
+        no->tamanho = tamanho;
+        
+        // 2. Reajusta os IDs de todos os outros nós
+        atualizar_id(this->raiz, id_antigo);
+        
+        // 3. Atribui o novo ID mais alto ao nó atualizado
+        no->id = this->proximo_id - 1;
+
+        // 4. Corrige o contador para a próxima inserção
+        this->proximo_id--; 
+
+    } else if (no == nullptr) {
+        // Bloco para inserir um nó novo
+        this->raiz = inserir_no(this->raiz, this->proximo_id, nome, tipo, tamanho);
+        this->proximo_id++;
+    }
+}
+
+    void imprimir_em_ordem(ostream& out) {
+        out << "[EPD]" << endl;
+        em_ordem(this->raiz, out);
+    }
+    void imprimir_pre_ordem(ostream& out) {
+        out << "[PED]" << endl;
+        pre_ordem(this->raiz, out);
+    }
+    void imprimir_pos_ordem(ostream& out) {
+        out << "[EDP]" << endl;
+        pos_ordem(this->raiz, out);
+    }
 };
 
 int main(int argc, char* argv[]) {
     if (argc != 3) {
-        std::cerr << "Uso: " << argv[0] << " <arquivo_de_entrada> <arquivo_de_saida>" << std::endl;
+        // Mensagem de erro para o usuário caso não passe os argumentos corretos
+        cerr << "Uso: " << argv[0] << " <arquivo_de_entrada> <arquivo_de_saida>" << endl;
         return 1;
     }
-    std::ifstream inputFile(argv[1]);
-    std::ofstream outputFile(argv[2]);
+    ifstream inputFile(argv[1]);
+    ofstream outputFile(argv[2]);
     if (!inputFile.is_open() || !outputFile.is_open()) {
-        std::cerr << "Erro ao abrir arquivos." << std::endl;
+        cerr << "Erro ao abrir arquivos." << endl;
         return 1;
     }
-    ArvoreBinariaBusca arvoreArquivos;
-    int numOperacoes;
-    inputFile >> numOperacoes; 
-    std::string nome, permissao;
-    uint64_t tamanho;
-    for (int i = 0; i < numOperacoes; ++i) {
-        inputFile >> nome >> permissao >> tamanho;
-        arvoreArquivos.inserir(nome, permissao, tamanho);
+
+    Arvore arvore;
+    int n;
+    inputFile >> n;
+    string nome, tipo;
+    int tamanho;
+
+    for (int i = 0; i < n; ++i) {
+        inputFile >> nome >> tipo >> tamanho;
+        arvore.inserir(nome, tipo, tamanho);
     }
-    
-    // --- SEÇÃO CORRIGIDA ---
-    // As chamadas de impressão agora são feitas em sequência, sem a linha extra entre elas.
-    arvoreArquivos.imprimirEmOrdem(outputFile);
-    arvoreArquivos.imprimirPreOrdem(outputFile);
-    arvoreArquivos.imprimirPosOrdem(outputFile);
+
+    arvore.imprimir_em_ordem(outputFile);
+    arvore.imprimir_pre_ordem(outputFile);
+    arvore.imprimir_pos_ordem(outputFile);
 
     inputFile.close();
     outputFile.close();
-    std::cout << "Processo concluido. Saida gerada em '" << argv[2] << "'." << std::endl;
+
+    // Adiciona uma mensagem no terminal para avisar que terminou.
+    cout << "Processo concluido. Saida gerada em '" << argv[2] << "'." << endl;
+
     return 0;
 }
