@@ -1,34 +1,58 @@
 #include <iostream>
 #include <fstream>
-#include <cstdint>
 
-// Funções auxiliares de string (sem alterações)
-int tamanhoString(const char* str);
-void copiarString(char* destino, const char* origem);
-int compararStrings(const char* str1, const char* str2);
-void concatenarString(char* destino, const char* origem);
+// --- Funções Auxiliares de String ---
+int tamanhoString(const char* str) {
+    int tamanho = 0;
+    while (str[tamanho] != '\0') tamanho++;
+    return tamanho;
+}
 
+void copiarString(char* destino, const char* origem) {
+    int i = 0;
+    while (origem[i] != '\0') {
+        destino[i] = origem[i];
+        i++;
+    }
+    destino[i] = '\0';
+}
+
+void concatenarString(char* destino, const char* origem) {
+    int i = tamanhoString(destino);
+    int j = 0;
+    while (origem[j] != '\0') {
+        destino[i + j] = origem[j];
+        j++;
+    }
+    destino[i + j] = '\0';
+}
+
+int compararAlfabetica(const char* str1, const char* str2) {
+    while (*str1 && (*str1 == *str2)) {
+        str1++;
+        str2++;
+    }
+    return *(const unsigned char*)str1 - *(const unsigned char*)str2;
+}
+
+// --- Estrutura do Nó da Árvore ---
 struct No {
     char* palavra;
     char** sinonimos;
     int num_sinonimos;
-    int8_t B;
+    int altura;
     No *E, *D;
 
-    No(const char* p_palavra, char** p_sinonimos, int p_num_sinonimos) {
+    No(const char* p_palavra, char** p_sinonimos, int p_num_sinonimos)
+        : palavra(nullptr), sinonimos(nullptr), num_sinonimos(p_num_sinonimos), altura(1), E(nullptr), D(nullptr) {
         palavra = new char[tamanhoString(p_palavra) + 1];
         copiarString(palavra, p_palavra);
 
-        sinonimos = new char*[p_num_sinonimos];
-        for (int i = 0; i < p_num_sinonimos; ++i) {
+        sinonimos = new char*[num_sinonimos];
+        for (int i = 0; i < num_sinonimos; ++i) {
             sinonimos[i] = new char[tamanhoString(p_sinonimos[i]) + 1];
             copiarString(sinonimos[i], p_sinonimos[i]);
         }
-        num_sinonimos = p_num_sinonimos;
-
-        B = 0;
-        E = nullptr;
-        D = nullptr;
     }
 
     ~No() {
@@ -40,248 +64,166 @@ struct No {
     }
 };
 
+// --- Classe da Árvore AVL ---
 class ArvoreAVL {
-public:
-    ArvoreAVL() { raiz = nullptr; }
-    ~ArvoreAVL() { destruirArvore(raiz); }
+private:
+    No* raiz;
 
-    void inserir(const char* palavra, char** sinonimos, int num_sinonimos) {
-        bool cresceu;
-        inserir_recursivo(raiz, palavra, sinonimos, num_sinonimos, cresceu);
-    }
-
-    void buscar(const char* palavra_busca, std::ostream& saida) {
-        char percurso[500] = "";
-        No* resultado = buscar_recursivo(raiz, palavra_busca, percurso);
-
-        saida << "[" << percurso << "]" << std::endl;
-        if (resultado != nullptr) {
-            for (int i = 0; i < resultado->num_sinonimos; ++i) {
-                // MUDANÇA 1: Separador agora é apenas "," sem espaço.
-                saida << resultado->sinonimos[i] << (i == resultado->num_sinonimos - 1 ? "" : ",");
-            }
-            saida << std::endl;
+    int altura(No* p) { return p ? p->altura : 0; }
+    int fatorBalanceamento(No* p) { return p ? altura(p->D) - altura(p->E) : 0; }
+    void atualizarAltura(No* p) {
+        if (p) {
+            int hE = altura(p->E), hD = altura(p->D);
+            p->altura = 1 + (hE > hD ? hE : hD);
         }
     }
 
-private:
-    No *raiz;
+    No* rotacaoDireita(No* y) {
+        No* x = y->E;
+        y->E = x->D;
+        x->D = y;
+        atualizarAltura(y);
+        atualizarAltura(x);
+        return x;
+    }
 
-    // Funções de rotação (sem alterações)
-    void rotacaoD(No*& p);
-    void rotacaoE(No*& p);
-    void rotacaoDE(No*& p);
-    void rotacaoED(No*& p);
-    
-    // Função de inserção recursiva (sem alterações)
-    void inserir_recursivo(No*& p, const char* palavra_nova, char** sinonimos, int num_sinonimos, bool& cresceu);
+    No* rotacaoEsquerda(No* y) {
+        No* x = y->D;
+        y->D = x->E;
+        x->E = y;
+        atualizarAltura(y);
+        atualizarAltura(x);
+        return x;
+    }
 
-    // Função de busca com a correção do "->?" (sem novas alterações aqui)
-    No* buscar_recursivo(No* p, const char* palavra_busca, char* percurso) {
-        if (p == nullptr) {
-            concatenarString(percurso, "->?");
+    No* inserir_rec(No* p, const char* palavra, char** sinonimos, int num_sinonimos) {
+        if (!p) return new No(palavra, sinonimos, num_sinonimos);
+
+        int comp = compararAlfabetica(palavra, p->palavra);
+        if (comp < 0)
+            p->E = inserir_rec(p->E, palavra, sinonimos, num_sinonimos);
+        else if (comp > 0)
+            p->D = inserir_rec(p->D, palavra, sinonimos, num_sinonimos);
+        else
+            return p;
+
+        atualizarAltura(p);
+        int fb = fatorBalanceamento(p);
+
+        if (fb < -1 && compararAlfabetica(palavra, p->E->palavra) < 0)
+            return rotacaoDireita(p);
+        if (fb > 1 && compararAlfabetica(palavra, p->D->palavra) > 0)
+            return rotacaoEsquerda(p);
+        if (fb < -1 && compararAlfabetica(palavra, p->E->palavra) > 0) {
+            p->E = rotacaoEsquerda(p->E);
+            return rotacaoDireita(p);
+        }
+        if (fb > 1 && compararAlfabetica(palavra, p->D->palavra) < 0) {
+            p->D = rotacaoDireita(p->D);
+            return rotacaoEsquerda(p);
+        }
+        return p;
+    }
+
+    No* buscar_rec(No* p, const char* palavra, char* caminho) {
+        if (!p) {
+            if (tamanhoString(caminho) > 0)
+                concatenarString(caminho, "->?");
             return nullptr;
         }
-        
-        if (tamanhoString(percurso) > 0) {
-            concatenarString(percurso, "->");
-        }
-        concatenarString(percurso, p->palavra);
-        
-        int comparacao = compararStrings(palavra_busca, p->palavra);
+        if (caminho[0] != '\0')
+            concatenarString(caminho, "->");
+        concatenarString(caminho, p->palavra);
 
-        if (comparacao < 0) {
-            return buscar_recursivo(p->E, palavra_busca, percurso);
-        } else if (comparacao > 0) {
-            return buscar_recursivo(p->D, palavra_busca, percurso);
-        } else {
+        int comp = compararAlfabetica(palavra, p->palavra);
+        if (comp < 0)
+            return buscar_rec(p->E, palavra, caminho);
+        else if (comp > 0)
+            return buscar_rec(p->D, palavra, caminho);
+        else
             return p;
+    }
+
+    void limpar_rec(No* p) {
+        if (p) {
+            limpar_rec(p->E);
+            limpar_rec(p->D);
+            delete p;
         }
     }
 
-    void destruirArvore(No* no) {
-        if (no != nullptr) {
-            destruirArvore(no->E);
-            destruirArvore(no->D);
-            delete no;
-        }
+public:
+    ArvoreAVL() : raiz(nullptr) {}
+    ~ArvoreAVL() { limpar_rec(raiz); }
+
+    void inserir(const char* palavra, char** sinonimos, int num_sinonimos) {
+        raiz = inserir_rec(raiz, palavra, sinonimos, num_sinonimos);
+    }
+
+    No* buscar(const char* palavra, char* caminho) {
+        caminho[0] = '\0';
+        return buscar_rec(raiz, palavra, caminho);
     }
 };
 
-// ===================================================================
-// Função Principal (main) com a correção
-// ===================================================================
-
-int main(int argc, char *argv[]) {
+// --- Função Principal ---
+int main(int argc, char* argv[]) {
     if (argc != 3) {
-        std::cerr << "ERRO: Uso: " << argv[0] << " <arquivo_entrada> <arquivo_saida>" << std::endl;
+        std::cerr << "Uso: " << argv[0] << " <arquivo_entrada> <arquivo_saida>\n";
         return 1;
     }
-
-    std::ifstream entrada(argv[1]);
-    if (!entrada) {
-        std::cerr << "ERRO: Nao foi possivel abrir o arquivo de entrada: " << argv[1] << std::endl;
+    std::ifstream inFile(argv[1]);
+    if (!inFile) {
+        std::cerr << "Erro ao abrir o arquivo de entrada: " << argv[1] << "\n";
         return 1;
     }
-
-    std::ofstream saida(argv[2]);
-    if (!saida) {
-        std::cerr << "ERRO: Nao foi possivel criar o arquivo de saida: " << argv[2] << std::endl;
-        entrada.close();
+    std::ofstream outFile(argv[2]);
+    if (!outFile) {
+        std::cerr << "Erro ao abrir o arquivo de saida: " << argv[2] << "\n";
         return 1;
     }
 
     ArvoreAVL dicionario;
-
-    // --- Leitura e Inserção das Palavras ---
     int num_palavras;
-    entrada >> num_palavras;
+    inFile >> num_palavras;
 
-    char buffer_palavra[31];
-    // MUDANÇA: Criamos um buffer temporário para ler os sinônimos com segurança.
-    char temp_sinonimo[31]; 
-    
-    char* buffer_sinonimos[10];
-    for(int i=0; i < 10; ++i) {
-        buffer_sinonimos[i] = new char[31];
-    }
+    char palavra_buffer[256], sinonimo_buffer[256];
 
     for (int i = 0; i < num_palavras; ++i) {
         int num_sinonimos;
-        entrada >> buffer_palavra >> num_sinonimos;
-        
-        // Laço de leitura dos sinônimos corrigido
+        inFile >> palavra_buffer >> num_sinonimos;
+        char** sinonimos_temp = new char*[num_sinonimos];
         for (int j = 0; j < num_sinonimos; ++j) {
-            entrada >> temp_sinonimo; // 1. Lê para o buffer seguro e temporário.
-            copiarString(buffer_sinonimos[j], temp_sinonimo); // 2. Copia para o destino final.
+            inFile >> sinonimo_buffer;
+            sinonimos_temp[j] = new char[tamanhoString(sinonimo_buffer) + 1];
+            copiarString(sinonimos_temp[j], sinonimo_buffer);
         }
-        dicionario.inserir(buffer_palavra, buffer_sinonimos, num_sinonimos);
+        dicionario.inserir(palavra_buffer, sinonimos_temp, num_sinonimos);
+        for (int j = 0; j < num_sinonimos; ++j)
+            delete[] sinonimos_temp[j];
+        delete[] sinonimos_temp;
     }
-    
-    // --- Leitura e Processamento das Consultas ---
+
     int num_consultas;
-    entrada >> num_consultas;
+    inFile >> num_consultas;
+    char caminho_buffer[8192];
 
     for (int i = 0; i < num_consultas; ++i) {
-        entrada >> buffer_palavra;
-        dicionario.buscar(buffer_palavra, saida);
+        inFile >> palavra_buffer;
+        No* resultado = dicionario.buscar(palavra_buffer, caminho_buffer);
+        outFile << "[" << caminho_buffer << "]\n";
+        if (resultado) {
+            for (int j = 0; j < resultado->num_sinonimos; ++j) {
+                outFile << resultado->sinonimos[j];
+                if (j < resultado->num_sinonimos - 1) outFile << ",";
+            }
+            outFile << "\n";
+        } else {
+            outFile << "-\n";
+        }
     }
 
-    saida << "-";
-
-    // --- Limpeza ---
-    for(int i=0; i < 10; ++i) {
-        delete[] buffer_sinonimos[i];
-    }
-    entrada.close();
-    saida.close();
-
+    inFile.close();
+    outFile.close();
     return 0;
-}
-
-// ===================================================================
-// Implementação das Funções Auxiliares e de Rotação
-// (Cole o resto das implementações que não mudaram aqui)
-// ===================================================================
-// Funções de string
-int tamanhoString(const char* str) {
-    int tamanho = 0;
-    while (str[tamanho] != '\0') tamanho++;
-    return tamanho;
-}
-int compararStrings(const char* str1, const char* str2) {
-    int i = 0;
-    while (str1[i] == str2[i]) {
-        if (str1[i] == '\0') return 0;
-        i++;
-    }
-    return str1[i] - str2[i];
-}
-void copiarString(char* destino, const char* origem) {
-    int i = 0;
-    while (origem[i] != '\0') {
-        destino[i] = origem[i];
-        i++;
-    }
-    destino[i] = '\0';
-}
-void concatenarString(char* destino, const char* origem) {
-    int i = tamanhoString(destino);
-    int j = 0;
-    while (origem[j] != '\0') {
-        destino[i + j] = origem[j];
-        j++;
-    }
-    destino[i + j] = '\0';
-}
-
-// Funções de rotação e inserção
-void ArvoreAVL::rotacaoD(No*& p) {
-    No* u = p->E;
-    p->E = u->D;
-    u->D = p;
-    p->B = 0;
-    p = u;
-}
-void ArvoreAVL::rotacaoE(No*& p) {
-    No* u = p->D;
-    p->D = u->E;
-    u->E = p;
-    p->B = 0;
-    p = u;
-}
-void ArvoreAVL::rotacaoDE(No*& p) {
-    No* u = p->D;
-    No* v = u->E;
-    p->D = v->E;
-    u->E = v->D;
-    v->E = p;
-    v->D = u;
-    if (v->B == -1) p->B = 1; else p->B = 0;
-    if (v->B == 1) u->B = -1; else u->B = 0;
-    p = v;
-}
-void ArvoreAVL::rotacaoED(No*& p) {
-    No* u = p->E;
-    No* v = u->D;
-    p->E = v->D;
-    u->D = v->E;
-    v->D = p;
-    v->E = u;
-    if (v->B == 1) p->B = -1; else p->B = 0;
-    if (v->B == -1) u->B = 1; else u->B = 0;
-    p = v;
-}
-void ArvoreAVL::inserir_recursivo(No*& p, const char* palavra_nova, char** sinonimos, int num_sinonimos, bool& cresceu) {
-    if (p == nullptr) {
-        p = new No(palavra_nova, sinonimos, num_sinonimos);
-        cresceu = true;
-        return;
-    }
-    int comparacao = compararStrings(palavra_nova, p->palavra);
-    if (comparacao < 0) {
-        inserir_recursivo(p->E, palavra_nova, sinonimos, num_sinonimos, cresceu);
-        if (cresceu) {
-            switch (p->B) {
-                case 1: p->B = 0; cresceu = false; break;
-                case 0: p->B = -1; cresceu = true; break;
-                case -1:
-                    if (p->E->B == -1) rotacaoD(p); else rotacaoED(p);
-                    p->B = 0; cresceu = false; break;
-            }
-        }
-    } else if (comparacao > 0) {
-        inserir_recursivo(p->D, palavra_nova, sinonimos, num_sinonimos, cresceu);
-        if (cresceu) {
-            switch (p->B) {
-                case -1: p->B = 0; cresceu = false; break;
-                case 0: p->B = 1; cresceu = true; break;
-                case 1:
-                    if (p->D->B == 1) rotacaoE(p); else rotacaoDE(p);
-                    p->B = 0; cresceu = false; break;
-            }
-        }
-    } else {
-        cresceu = false;
-    }
 }

@@ -1,0 +1,1015 @@
+        Árvore B+
+    Estruturas de Dados
+
+
+        Bruno Prado
+
+Departamento de Computação / UFS
+ Introdução
+
+
+
+
+          I O que é uma árvore B+?
+                  I É uma variação da árvore B
+                  I Os nós internos armazenam somente as chaves e
+                    referências para outros nós (indexação)
+                  I Uma lista encadeada é construída com os nós folha que
+                    armazenam as referências para os dados
+
+
+
+
+(C) 2025 Bruno Prado                  Departamento de Computação / UFS      2 - 57
+ Introdução
+
+          I Árvore B+ de ordem k
+                  I Nó interno
+
+                                            P
+                                 a1 a2     ···    ak-2 ak-1
+
+
+                                           ···
+
+                   F1        F2                             Fk-1        Fk
+
+
+(C) 2025 Bruno Prado                 Departamento de Computação / UFS        3 - 57
+ Introdução
+
+          I Árvore B+ de ordem k
+                  I Nós folha
+
+                                            P
+                                 a1 a2     ···    ak-2 ak-1
+
+
+                                           ···
+
+                   F1           F2                          Fk-1        Fk
+
+
+(C) 2025 Bruno Prado                 Departamento de Computação / UFS        4 - 57
+ Introdução
+
+
+          I Árvore B+ de ordem 3
+
+                                       10
+
+                             3 7                            13 21
+
+                       1 2   3 5   7 8        10 12         13 17     21 29
+
+
+
+
+(C) 2025 Bruno Prado               Departamento de Computação / UFS           5 - 57
+ Árvore B+
+
+          I Definição da estrutura
+                  I Nós internos
+
+
+
+                                                                   P
+                                                                  ···
+
+
+
+
+                                                                        Pk-1
+                                              P0
+                                                   C0                          Ck-1
+
+
+
+
+                                                                                         Pk
+                                                             P1
+                                 ···                              ···                              ···
+                                       Pk-1
+
+
+
+
+                                                                                                         Pk-1
+                                              Ck-1                                                              Ck-1
+                  P0
+
+
+
+
+                                                                               P0
+          F0           C0                                                           C0
+                                                        Pk
+
+
+
+
+                                                                                                                       Pk
+                            P1
+
+
+
+
+                                                                                              P1
+                                                                                                                            Fk
+
+
+
+(C) 2025 Bruno Prado                                 Departamento de Computação / UFS                                            6 - 57
+ Árvore B+
+
+          I Definição da estrutura
+                  I Nó folha
+
+
+
+                                                            . . . ... . . .
+                                                                    ...
+
+
+                                 ···                          ···                            ···
+                                       Pk-1
+
+
+
+
+                                                                                                   Pk-1
+                                              Ck-1                                                        Ck-1
+                  P0
+
+
+
+
+                                                                              P0
+          F0           C0                                                          C0
+                                                       Pk
+
+
+
+
+                                                                                                                 Pk
+                            P1
+
+
+
+
+                                                                                        P1
+                                                                                                                      Fk
+
+
+(C) 2025 Bruno Prado                                 Departamento de Computação / UFS                                      7 - 57
+ Árvore B+
+
+          I Implementação em C
+                  I Estrutura e ponteiros
+
+   1    // Padrão de tipos por tamanho
+   2    #include <stdint.h>
+   3    // Estrutura de nó
+   4    typedef struct no {
+   5        // Vetor de chaves
+   6        uint32_t* C;
+   7        // Vetor de filhos
+   8        struct no** P;
+   9        // Quantidade utilizada
+  10        uint32_t n;
+   11   } no;
+
+
+
+
+(C) 2025 Bruno Prado                  Departamento de Computação / UFS   8 - 57
+ Árvore B+
+
+
+
+
+          I Operações básicas
+                  I Busca
+                       I Exata
+                       I Intervalo
+                  I Inserção
+                  I Remoção
+
+
+
+
+(C) 2025 Bruno Prado                 Departamento de Computação / UFS   9 - 57
+ Árvore B+
+
+          I Operação de busca exata
+                  I Parâmetro de chave: 13
+                  I A busca tem início pela raiz da árvore, checando as chaves
+                    do nó e acessando as subárvores
+
+                                           10
+
+                             3 7                               13 21
+
+                       1 2   3 5      7 8        10 12         13 17     21 29
+
+
+
+(C) 2025 Bruno Prado                  Departamento de Computação / UFS           10 - 57
+ Árvore B+
+
+          I Operação de busca exata
+                  I Parâmetro de chave: 13
+                  I A busca tem início pela raiz da árvore, checando as chaves
+                    do nó e acessando as subárvores
+
+                                           10
+
+                             3 7                                13 21
+
+                       1 2   3 5      7 8         10 12         13 17     21 29
+
+
+
+(C) 2025 Bruno Prado                   Departamento de Computação / UFS           11 - 57
+ Árvore B+
+
+          I Operação de busca exata
+                  I Parâmetro de chave: 13
+                  I A busca tem início pela raiz da árvore, checando as chaves
+                    do nó e acessando as subárvores
+
+                                            10
+
+                             3 7                                13 21
+
+                       1 2   3 5      7 8         10 12         13 17     21 29
+
+
+
+(C) 2025 Bruno Prado                   Departamento de Computação / UFS           12 - 57
+ Árvore B+
+
+
+          I Operação de busca exata
+                  I Parâmetro de chave: 13
+                  I A referência do nó encontrado é retornada
+
+                                          10
+
+                             3 7                              13 21
+
+                       1 2   3 5     7 8        10 12         13 17     21 29
+
+
+
+(C) 2025 Bruno Prado                 Departamento de Computação / UFS           13 - 57
+ Árvore B+
+
+          I Operação de busca por intervalo
+                  I Parâmetros de chave: 4 e 11
+                  I A busca tem início pela raiz da árvore, checando as chaves
+                    do nó e acessando as subárvores
+
+                                           10
+
+                             3 7                                13 21
+
+                       1 2   3 5      7 8         10 12         13 17     21 29
+
+
+
+(C) 2025 Bruno Prado                   Departamento de Computação / UFS           14 - 57
+ Árvore B+
+
+          I Operação de busca por intervalo
+                  I Parâmetros de chave: 4 e 11
+                  I A busca tem início pela raiz da árvore, checando as chaves
+                    do nó e acessando as subárvores
+
+                                           10
+
+                             3 7                                13 21
+
+                       1 2   3 5      7 8         10 12         13 17     21 29
+
+
+
+(C) 2025 Bruno Prado                   Departamento de Computação / UFS           15 - 57
+ Árvore B+
+
+          I Operação de busca por intervalo
+                  I Parâmetros de chave: 4 e 11
+                  I A busca tem início pela raiz da árvore, checando as chaves
+                    do nó e acessando as subárvores
+
+                                           10
+
+                             3 7                                13 21
+
+                       1 2   3 5      7 8         10 12         13 17     21 29
+
+
+
+(C) 2025 Bruno Prado                   Departamento de Computação / UFS           16 - 57
+ Árvore B+
+
+          I Operação de busca por intervalo
+                  I Parâmetros de chave: 4 e 11
+                  I A busca tem início pela raiz da árvore, checando as chaves
+                    do nó e acessando as subárvores
+
+                                           10
+
+                             3 7                                13 21
+
+                       1 2   3 5      7 8         10 12         13 17     21 29
+
+
+
+(C) 2025 Bruno Prado                   Departamento de Computação / UFS           17 - 57
+ Árvore B+
+
+
+          I Operação de busca por intervalo
+                  I Parâmetros de chave: 4 e 11
+                  I As referências dos nós no intervalo são retornadas
+
+                                          10
+
+                             3 7                               13 21
+
+                       1 2   3 5     7 8         10 12         13 17     21 29
+
+
+
+(C) 2025 Bruno Prado                  Departamento de Computação / UFS           18 - 57
+ Árvore B+
+
+
+          I Operação de busca por intervalo
+                  I Parâmetros de chave: 4 e 11
+                  I As referências dos nós no intervalo são retornadas
+
+                                          10
+
+                             3 7                               13 21
+
+                       1 2   3 5     7 8         10 12         13 17     21 29
+
+
+
+(C) 2025 Bruno Prado                  Departamento de Computação / UFS           19 - 57
+ Árvore B+
+
+
+          I Operação de busca por intervalo
+                  I Parâmetros de chave: 4 e 11
+                  I As referências dos nós no intervalo são retornadas
+
+                                           10
+
+                             3 7                               13 21
+
+                       1 2   3 5     7 8         10 12         13 17     21 29
+
+
+
+(C) 2025 Bruno Prado                  Departamento de Computação / UFS           20 - 57
+ Árvore B+
+
+
+          I Operação de busca por intervalo
+                  I Parâmetros de chave: 4 e 11
+                  I As referências dos nós no intervalo são retornadas
+
+                                          10
+
+                             3 7                               13 21
+
+                       1 2   3 5     7 8         10 12         13 17     21 29
+
+
+
+(C) 2025 Bruno Prado                  Departamento de Computação / UFS           21 - 57
+ Árvore B+
+
+          I Busca por intervalo
+                  I Retorna nós no intervalo de chaves
+
+   1    // Procedimento de busca por intervalo
+   2    nos* busca_intervalo(no* x, uint32_t a, uint32_t b) {
+   3        uint32_t ini = min(a, b), fim = max(a, b);
+   4        nos* r = criar_nos();
+   5        no* f = busca_folha(x, ini, fim);
+   6        while(f != NULL && f->C[0] <= fim) {
+   7            adicionar_no(r, f);
+   8            f = f->P[k];
+   9        }
+  10        return r;
+   11   }
+
+
+
+
+(C) 2025 Bruno Prado                  Departamento de Computação / UFS   22 - 57
+ Árvore B+
+
+
+          I Operação de inserção
+                  I Parâmetro de chave: 19
+
+                                          10
+
+                          3 7                                    13 21
+
+               1 2        3 5       7 8         10 12            13 17   21 29
+
+
+
+
+(C) 2025 Bruno Prado                 Departamento de Computação / UFS            23 - 57
+ Árvore B+
+
+
+          I Operação de inserção
+                  I Parâmetro de chave: 19
+
+                                          10
+
+                          3 7                                    13 21
+
+               1 2        3 5       7 8         10 12            13 17   21 29
+
+
+
+
+(C) 2025 Bruno Prado                 Departamento de Computação / UFS            24 - 57
+ Árvore B+
+
+
+          I Operação de inserção
+                  I Parâmetro de chave: 19
+
+                                          10
+
+                          3 7                                    13 21
+
+               1 2        3 5       7 8         10 12            13 17   21 29
+
+
+
+
+(C) 2025 Bruno Prado                 Departamento de Computação / UFS            25 - 57
+ Árvore B+
+
+
+          I Operação de inserção
+                  I Parâmetro de chave: 19
+
+                                          10
+
+                          3 7                                    13 21
+
+               1 2        3 5       7 8         10 12            13 17   21 29
+
+
+
+
+(C) 2025 Bruno Prado                 Departamento de Computação / UFS            26 - 57
+ Árvore B+
+
+
+          I Operação de inserção
+                  I Parâmetro de chave: 19
+
+                                         10
+
+                          3 7                                   13 21
+
+               1 2        3 5       7 8         10 12         13 17 19   21 29
+
+
+
+
+(C) 2025 Bruno Prado                 Departamento de Computação / UFS            27 - 57
+ Árvore B+
+
+
+          I Operação de inserção
+                  I Parâmetro de chave: 19
+
+                                         10
+
+                          3 7                                   13 21
+
+               1 2        3 5       7 8         10 12         13 17 19   21 29
+
+
+
+
+(C) 2025 Bruno Prado                 Departamento de Computação / UFS            28 - 57
+ Árvore B+
+
+
+          I Operação de inserção
+                  I Parâmetro de chave: 19
+
+                                       10
+
+                       3 7                                    13 17 21
+
+            1 2        3 5      7 8         10 12        13              17 19   21 29
+
+
+
+
+(C) 2025 Bruno Prado                  Departamento de Computação / UFS                   29 - 57
+ Árvore B+
+
+
+          I Operação de inserção
+                  I Parâmetro de chave: 19
+
+
+                                                10 17
+
+                       3 7                       13                             21
+
+          1 2          3 5   7 8    10 12        13                     17 19   21 29
+
+
+
+(C) 2025 Bruno Prado                 Departamento de Computação / UFS                   30 - 57
+ Árvore B+
+
+          I Operação de remoção
+                  I Parâmetro de chave: 21
+                  I Caso 1: nó interno com filho n >      k
+                                                          2
+
+
+                                                 10 17
+
+                       3 7                        13                             21
+
+          1 2          3 5   7 8     10 12        13                     17 19   21 29
+
+
+
+(C) 2025 Bruno Prado                  Departamento de Computação / UFS                   31 - 57
+ Árvore B+
+
+          I Operação de remoção
+                  I Parâmetro de chave: 21
+                  I Caso 1: nó interno com filho n >       k
+                                                           2
+
+
+                                                 10 17
+
+                       3 7                        13                             21
+
+          1 2          3 5   7 8     10 12        13                     17 19   21 29
+
+
+
+(C) 2025 Bruno Prado                  Departamento de Computação / UFS                   32 - 57
+ Árvore B+
+
+          I Operação de remoção
+                  I Parâmetro de chave: 21
+                  I Caso 1: nó interno com filho n >       k
+                                                           2
+
+
+                                                 10 17
+
+                       3 7                        13                             21
+
+          1 2          3 5   7 8     10 12        13                     17 19   21 29
+
+
+
+(C) 2025 Bruno Prado                  Departamento de Computação / UFS                   33 - 57
+ Árvore B+
+
+          I Operação de remoção
+                  I Parâmetro de chave: 21
+                  I Caso 1: nó interno com filho n >       k
+                                                           2
+
+
+                                                 10 17
+
+                       3 7                        13                             21
+
+          1 2          3 5   7 8     10 12        13                     17 19   21 29
+
+
+
+(C) 2025 Bruno Prado                  Departamento de Computação / UFS                   34 - 57
+ Árvore B+
+
+          I Operação de remoção
+                  I Parâmetro de chave: 21
+                  I Caso 1: nó interno com filho n >       k
+                                                           2
+
+
+                                                 10 17
+
+                       3 7                        13                             21
+
+          1 2          3 5   7 8     10 12        13                     17 19   21 29
+
+
+
+(C) 2025 Bruno Prado                  Departamento de Computação / UFS                   35 - 57
+ Árvore B+
+
+          I Operação de remoção
+                  I Parâmetro de chave: 21
+                  I Caso 1: nó interno com filho n >       k
+                                                           2
+
+
+                                                 10 17
+
+                       3 7                        13                             21
+
+          1 2          3 5   7 8     10 12        13                     17 19   21 29
+
+
+
+(C) 2025 Bruno Prado                  Departamento de Computação / UFS                   36 - 57
+ Árvore B+
+
+          I Operação de remoção
+                  I Parâmetro de chave: 21
+                  I Caso 1: nó interno com filho n >       k
+                                                           2
+
+
+                                                 10 17
+
+                       3 7                        13                             29
+
+          1 2          3 5   7 8     10 12        13                     17 19   29
+
+
+
+(C) 2025 Bruno Prado                  Departamento de Computação / UFS                37 - 57
+ Árvore B+
+
+          I Operação de remoção
+                  I Parâmetro de chave: 29
+                  I Caso 1: nó interno com filho n >       k
+                                                           2
+
+
+                                                 10 17
+
+                       3 7                        13                             29
+
+          1 2          3 5   7 8     10 12        13                     17 19   29
+
+
+
+(C) 2025 Bruno Prado                  Departamento de Computação / UFS                38 - 57
+ Árvore B+
+
+          I Operação de remoção
+                  I Parâmetro de chave: 29
+                  I Caso 1: nó interno com filho n >       k
+                                                           2
+
+
+                                                 10 17
+
+                       3 7                        13                             29
+
+          1 2          3 5   7 8     10 12        13                     17 19   29
+
+
+
+(C) 2025 Bruno Prado                  Departamento de Computação / UFS                39 - 57
+ Árvore B+
+
+          I Operação de remoção
+                  I Parâmetro de chave: 29
+                  I Caso 1: nó interno com filho n >       k
+                                                           2
+
+
+                                                 10 17
+
+                       3 7                        13                             29
+
+          1 2          3 5   7 8     10 12        13                     17 19   29
+
+
+
+(C) 2025 Bruno Prado                  Departamento de Computação / UFS                40 - 57
+ Árvore B+
+
+          I Operação de remoção
+                  I Parâmetro de chave: 29
+                  I Caso 1: nó interno com filho n >      k
+                                                          2
+
+
+                                                 10 17
+
+                       3 7                        13                             29
+
+          1 2          3 5   7 8     10 12        13                     17 19   29
+
+
+
+(C) 2025 Bruno Prado                  Departamento de Computação / UFS                41 - 57
+ Árvore B+
+
+          I Operação de remoção
+                  I Parâmetro de chave: 29
+                  I Caso 1: nó interno com filho n >       k
+                                                           2
+
+
+                                                 10 17
+
+                       3 7                        13                             29
+
+          1 2          3 5   7 8     10 12        13                     17 19   29
+
+
+
+(C) 2025 Bruno Prado                  Departamento de Computação / UFS                42 - 57
+ Árvore B+
+
+          I Operação de remoção
+                  I Parâmetro de chave: 29
+                  I Caso 1: nó interno com filho n >       k
+                                                           2
+
+
+                                                 10 17
+
+                       3 7                        13                             29
+
+          1 2          3 5   7 8     10 12        13                     17 19   29
+
+
+
+(C) 2025 Bruno Prado                  Departamento de Computação / UFS                43 - 57
+ Árvore B+
+
+          I Operação de remoção
+                  I Parâmetro de chave: 29
+                  I Caso 1: nó interno com filho n >       k
+                                                           2
+
+
+                                                 10 17
+
+                       3 7                        13                          19
+
+          1 2          3 5   7 8     10 12        13                     17   19
+
+
+
+(C) 2025 Bruno Prado                  Departamento de Computação / UFS             44 - 57
+ Árvore B+
+
+          I Operação de remoção
+                  I Parâmetro de chave: 19
+                  I Caso 2: nó interno com filhos n =       k
+                                                            2
+
+
+                                                 10 17
+
+                       3 7                        13                          19
+
+          1 2          3 5   7 8     10 12        13                     17   19
+
+
+
+(C) 2025 Bruno Prado                  Departamento de Computação / UFS             45 - 57
+ Árvore B+
+
+          I Operação de remoção
+                  I Parâmetro de chave: 19
+                  I Caso 2: nó interno com filhos n =       k
+                                                            2
+
+
+                                                 10 17
+
+                       3 7                        13                          19
+
+          1 2          3 5   7 8     10 12        13                     17   19
+
+
+
+(C) 2025 Bruno Prado                  Departamento de Computação / UFS             46 - 57
+ Árvore B+
+
+          I Operação de remoção
+                  I Parâmetro de chave: 19
+                  I Caso 2: nó interno com filhos n =       k
+                                                            2
+
+
+                                                 10 17
+
+                       3 7                        13                          19
+
+          1 2          3 5   7 8     10 12        13                     17   19
+
+
+
+(C) 2025 Bruno Prado                  Departamento de Computação / UFS             47 - 57
+ Árvore B+
+
+          I Operação de remoção
+                  I Parâmetro de chave: 19
+                  I Caso 2: nó interno com filhos n =       k
+                                                            2
+
+
+                                                 10 17
+
+                       3 7                        13                          19
+
+          1 2          3 5   7 8     10 12        13                     17   19
+
+
+
+(C) 2025 Bruno Prado                  Departamento de Computação / UFS             48 - 57
+ Árvore B+
+
+          I Operação de remoção
+                  I Parâmetro de chave: 19
+                  I Caso 2: nó interno com filhos n =       k
+                                                            2
+
+
+                                                 10 17
+
+                       3 7                        13                          19
+
+          1 2          3 5   7 8     10 12        13                     17   19
+
+
+
+(C) 2025 Bruno Prado                  Departamento de Computação / UFS             49 - 57
+ Árvore B+
+
+          I Operação de remoção
+                  I Parâmetro de chave: 19
+                  I Caso 2: nó interno com filhos n =       k
+                                                            2
+
+
+                                                 10 17
+
+                       3 7                        13                          19
+
+          1 2          3 5   7 8     10 12        13                     17   19
+
+
+
+(C) 2025 Bruno Prado                  Departamento de Computação / UFS             50 - 57
+ Árvore B+
+
+
+          I Operação de remoção
+                  I Parâmetro de chave: 19
+                  I Caso 2: nó interno com filhos n =       k
+                                                            2
+
+                                          10
+
+                             3 7                                13 17
+
+                       1 2   3 5      7 8        10 12          13       17
+
+
+
+(C) 2025 Bruno Prado                  Departamento de Computação / UFS        51 - 57
+ Árvore B+
+
+
+
+
+          I Análise de complexidade
+                  I Com ordem k, no pior caso, as operações percorrem a
+                    altura h = logk n da árvore com n nós, entretanto, na busca
+                    por intervalo, o pior caso é O(n), uma vez que o intervalo
+                    pode conter todos os nós da árvore
+                  I Espaço: Θ(n)
+                  I Tempo: Ω(logk n) e O(n)
+
+
+
+
+(C) 2025 Bruno Prado                   Departamento de Computação / UFS           52 - 57
+ Exemplo
+
+
+
+
+          I Construa uma árvore B+ de ordem 3
+                  I Insira os elementos com chaves 13, 2, 34, 11, 7, 43 e 9
+                  I Realize a remoção dos elementos de chave 7 e 9
+                  I Compare as diferenças entres as árvores B e B+
+
+
+
+
+(C) 2025 Bruno Prado                    Departamento de Computação / UFS      53 - 57
+ Exercício
+
+
+          I A empresa de tecnologia Poxim Tech está desenvolvendo
+            um banco de dados distribuído para arquivos baseado em
+            blockchain e árvore B+
+                  I Os arquivos possuem nomes + extensão com até 30
+                    caracteres, compostos exclusivamente por letras
+                  I A codificação do código hash é feita em hexadecimal de
+                    128 bits com caracteres maiúsculos, sendo utilizado como
+                    chave para buscas
+                  I Operações disponíveis:
+                       I INSERT nome tamanho hash
+                       I SELECT hash
+                       I SELECT RANGE hash1 hash2
+
+
+
+
+(C) 2025 Bruno Prado                  Departamento de Computação / UFS         54 - 57
+ Exercício
+
+
+          I Formato de arquivo de entrada
+                  I [#Ordem da árvore]
+                  I [#Quantidade de arquivos(n)]
+                  I [Nome1 ] [Tamanho1 ] [Hash1 ]
+                     .
+                  I ..
+                  I [Nomen ] [Tamanhon ] [Hashn ]
+                  I [#Número de operações(m)]
+                  I [Operação1 ]
+                     .
+                  I ..
+                  I [Operaçãom ]
+
+
+
+
+(C) 2025 Bruno Prado                 Departamento de Computação / UFS   55 - 57
+ Exercício
+          I Formato de arquivo de entrada
+
+   1    3
+   2    5
+   3    f.b 1 00000000000000000000000000000000
+   4    f.c 2 00000000000000000000000000000001
+   5    f.d 3 00000000000000000000000000000002
+   6    f.e 4 00000000000000000000000000000003
+   7    f.f 5 00000000000000000000000000000004
+   8    5
+   9    INSERT f.a 0 FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+  10    SELECT 00000000000000000000000000000004
+   11   SELECT 123456789 ABCDEF0123456789ABCDEF0
+  12    SELECT RANGE 00000000000000000000000000000005
+            FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE
+  13    SELECT RANGE 00000000000000000000000000000006
+            FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+
+
+
+(C) 2025 Bruno Prado           Departamento de Computação / UFS   56 - 57
+ Exercício
+
+          I Formato de arquivo de saída
+                  I Conteúdo armazenado pelo nó da árvore
+
+           1   [00000000000000000000000000000004]
+           2   f.f:size=5,hash=00000000000000000000000000000004
+           3   f.a:size=0,hash=FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+          4    [123456789 ABCDEF0123456789ABCDEF0]
+           5   -
+          6    [00000000000000000000000000000005 ,
+                   FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE]
+           7   -
+          8    [00000000000000000000000000000006 ,
+                   FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF]
+          9    f.f:size=5,hash=00000000000000000000000000000004
+          10   f.a:size=0,hash=FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+
+
+
+
+(C) 2025 Bruno Prado                Departamento de Computação / UFS   57 - 57
+
