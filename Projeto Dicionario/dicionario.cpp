@@ -70,7 +70,7 @@ private:
     No* raiz;
 
     int altura(No* p) { return p ? p->altura : 0; }
-    int fatorBalanceamento(No* p) { return p ? altura(p->E) - altura(p->D) : 0; }
+    int fatorBalanceamento(No* p) { return p ? altura(p->D) - altura(p->E) : 0; }
     void atualizarAltura(No* p) {
         if (p) {
             int hE = altura(p->E), hD = altura(p->D);
@@ -110,15 +110,15 @@ private:
         atualizarAltura(p);
         int fb = fatorBalanceamento(p);
 
-        if (fb > 1 && compararAlfabetica(palavra, p->E->palavra) < 0)
+        if (fb < -1 && compararAlfabetica(palavra, p->E->palavra) < 0)
             return rotacaoDireita(p);
-        if (fb < -1 && compararAlfabetica(palavra, p->D->palavra) > 0)
+        if (fb > 1 && compararAlfabetica(palavra, p->D->palavra) > 0)
             return rotacaoEsquerda(p);
-        if (fb > 1 && compararAlfabetica(palavra, p->E->palavra) > 0) {
+        if (fb < -1 && compararAlfabetica(palavra, p->E->palavra) > 0) {
             p->E = rotacaoEsquerda(p->E);
             return rotacaoDireita(p);
         }
-        if (fb < -1 && compararAlfabetica(palavra, p->D->palavra) < 0) {
+        if (fb > 1 && compararAlfabetica(palavra, p->D->palavra) < 0) {
             p->D = rotacaoDireita(p->D);
             return rotacaoEsquerda(p);
         }

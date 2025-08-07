@@ -2,6 +2,7 @@
 #include <fstream>
 #include <string>
 #include <sstream>
+// #include <algorithm> // REMOVIDO
 
 // --- ESTRUTURAS DE DADOS (sem alterações) ---
 struct Arquivo {
@@ -35,7 +36,7 @@ struct No {
     }
 };
 
-// --- CLASSE DA ÁRVORE B+ ---
+// --- CLASSE DA ÁRVORE B+ (sem alterações) ---
 class ArvoreBmais {
 private:
     No *raiz;
@@ -63,7 +64,6 @@ private:
             pai->n++;
             novo_no->pai = pai;
         } else {
-            // ALTERAÇÃO: Alocação dinâmica para remover warning
             std::string* temp_C = new std::string[k]; 
             void** temp_P = new void*[k + 1];
 
@@ -87,7 +87,6 @@ private:
             }
             novo_pai->P[novo_pai->n] = temp_P[k]; ((No*)novo_pai->P[novo_pai->n])->pai = novo_pai;
             
-            // ALTERAÇÃO: Liberação da memória
             delete[] temp_C;
             delete[] temp_P;
 
@@ -119,7 +118,6 @@ public:
             folha->n++;
         } else {
             No* nova_folha = new No(k, true);
-            // ALTERAÇÃO: Alocação dinâmica para remover warning
             std::string* temp_C = new std::string[k]; 
             void** temp_P = new void*[k];
 
@@ -135,7 +133,6 @@ public:
             nova_folha->prox = folha->prox;
             folha->prox = nova_folha;
 
-            // ALTERAÇÃO: Liberação da memória
             delete[] temp_C;
             delete[] temp_P;
 
@@ -173,12 +170,13 @@ public:
         return encontrado;
     }
 
-    void buscar_intervalo(std::string hash_inicio, std::string hash_fim, std::ofstream& outfile) {
+    bool buscar_intervalo(std::string hash_inicio, std::string hash_fim, std::ofstream& outfile) {
         outfile << "[" << hash_inicio << "," << hash_fim << "]\n";
         No* folha_atual = buscar_no_folha(hash_inicio);
-        if(!folha_atual) return;
+        bool found = false;
+        if (!folha_atual) return false;
 
-        while (folha_atual != nullptr) {
+        while (folha_atual) {
             if (folha_atual->n > 0 && folha_atual->C[0] > hash_fim) break;
             bool no_e_relevante = false;
             for (int i = 0; i < folha_atual->n; i++) {
@@ -187,14 +185,16 @@ public:
                     break;
                 }
             }
-            if(no_e_relevante) {
-                for (int i = 0; i < folha_atual->n; i++) {
-                    Arquivo* arq = (Arquivo*)folha_atual->P[i];
+            if (no_e_relevante) {
+                found = true;
+                for (int j = 0; j < folha_atual->n; j++) {
+                    Arquivo* arq = (Arquivo*)folha_atual->P[j];
                     outfile << arq->nome << ":size=" << arq->tamanho << ",hash=" << arq->hash << "\n";
                 }
             }
             folha_atual = folha_atual->prox;
         }
+        return found;
     }
 };
 
@@ -240,15 +240,18 @@ int main(int argc, char* argv[]) {
             if (token1 == "RANGE") {
                 std::string hash1, hash2;
                 ss >> hash1 >> hash2;
-                arvore.buscar_intervalo(hash1, hash2, outfile);
-                if (i < num_operacoes - 1) {
-                    outfile << "-\n";
+                // --- ALTERAÇÃO PRINCIPAL AQUI ---
+                // Substituído std::swap(hash1, hash2)
+                if (hash1 > hash2) {
+                    std::string temp_hash = hash1;
+                    hash1 = hash2;
+                    hash2 = temp_hash;
                 }
+                bool found = arvore.buscar_intervalo(hash1, hash2, outfile);
+                if (!found && i < num_operacoes - 1) outfile << "-\n";
             } else {
                 bool encontrado = arvore.buscar_exata(token1, outfile);
-                if (!encontrado && i < num_operacoes - 1) {
-                    outfile << "-\n";
-                }
+                if (!encontrado && i < num_operacoes - 1) outfile << "-\n";
             }
         }
     }
