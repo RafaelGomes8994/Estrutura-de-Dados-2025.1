@@ -1,261 +1,336 @@
-#include <iostream>
-#include <fstream>
-#include <string>
-#include <sstream>
+#include <cstdio>
+#include <cstring>
+#include <cstdlib>
 
-// --- ESTRUTURAS DE DADOS (sem alterações) ---
-struct Arquivo {
-    std::string nome;
-    long tamanho;
-    std::string hash;
+#define MAX_LINE_SIZE 512
+
+// --- ESTRUTURAS DE DADOS ---
+
+// Estrutura para armazenar informações de um arquivo
+struct ArquivoInfo {
+    char* nome;
+    long long tamanho;
+    char* hash;
+
+    // Construtor: copia os parâmetros para os campos
+    ArquivoInfo(const char* n, long long s, const char* h) : tamanho(s) {
+        nome = new char[strlen(n) + 1];
+        strcpy(nome, n);
+        hash = new char[strlen(h) + 1];
+        strcpy(hash, h);
+    }
+    // Destrutor: libera memória alocada
+    ~ArquivoInfo() {
+        delete[] nome;
+        delete[] hash;
+    }
+    // Imprime informações do arquivo
+    void imprimir(FILE* out) const {
+        fprintf(out, "%s:size=%lld,hash=%s", nome, tamanho, hash);
+    }
 };
 
+// Nó da árvore B+
 struct No {
-    bool folha;
-    int n;
-    int k;
-    std::string *C;
-    void **P;
-    No *prox;
-    No *pai;
+    bool folha;      // Indica se é folha
+    int n;           // Número de chaves
+    int k;           // Ordem da árvore
+    char** chaves;   // Vetor de chaves
+    void** ptrs;     // Ponteiros para filhos ou dados
+    No* prox;        // Ponteiro para próxima folha
+    No* pai;         // Ponteiro para pai
 
-    No(int ordem, bool eh_folha) {
-        k = ordem;
-        folha = eh_folha;
-        n = 0;
-        C = new std::string[k]; 
-        P = new void*[k + 1];
-        for (int i = 0; i < k + 1; ++i) P[i] = nullptr;
-        prox = nullptr;
-        pai = nullptr;
+    // Construtor: inicializa vetores e campos
+    No(int ordem, bool ehFolha) : folha(ehFolha), n(0), k(ordem), prox(0), pai(0) {
+        chaves = new char*[k];
+        ptrs = new void*[k + 1];
+        for (int i = 0; i < k; ++i) chaves[i] = 0;
+        for (int i = 0; i < k + 1; ++i) ptrs[i] = 0;
     }
+    // Destrutor: libera memória dos filhos/dados e vetores
     ~No() {
-        delete[] C;
-        delete[] P;
+        if (folha) {
+            for (int i = 0; i < n; ++i)
+                delete static_cast<ArquivoInfo*>(ptrs[i]);
+        } else {
+            for (int i = 0; i < n; ++i)
+                delete[] chaves[i];
+        }
+        delete[] chaves;
+        delete[] ptrs;
     }
 };
 
-// --- CLASSE DA ÁRVORE B+ ---
+// --- ÁRVORE B+ ---
+
 class ArvoreBmais {
-private:
-    No *raiz;
+    No* raiz;
     int k;
 
-    void inserir_no_pai(No* antigo_no, std::string chave, No* novo_no) {
-        if (antigo_no == raiz) {
-            raiz = new No(k, false);
-            raiz->C[0] = chave;
-            raiz->P[0] = antigo_no;
-            raiz->P[1] = novo_no;
-            raiz->n = 1;
-            antigo_no->pai = raiz;
-            novo_no->pai = raiz;
+    // Libera recursivamente todos os nós da árvore
+    void destruir(No* no) {
+        if (!no) return;
+        if (!no->folha)
+            for (int i = 0; i <= no->n; ++i)
+                destruir(static_cast<No*>(no->ptrs[i]));
+        delete no;
+    }
+
+    // Insere um novo nó pai após divisão
+    void inserirNoPai(No* antigo, const char* chave, No* novo) {
+        if (antigo == raiz) {
+            // Cria nova raiz se necessário
+            No* novaRaiz = new No(k, false);
+            novaRaiz->chaves[0] = new char[strlen(chave) + 1];
+            strcpy(novaRaiz->chaves[0], chave);
+            novaRaiz->ptrs[0] = antigo;
+            novaRaiz->ptrs[1] = novo;
+            novaRaiz->n = 1;
+            antigo->pai = novaRaiz;
+            novo->pai = novaRaiz;
+            raiz = novaRaiz;
             return;
         }
-        No* pai = antigo_no->pai;
+        No* pai = antigo->pai;
         if (pai->n < k - 1) {
+            // Insere normalmente no pai se houver espaço
             int i = 0;
-            while(i < pai->n && chave >= pai->C[i]) i++;
-            for(int j = pai->n; j > i; j--) pai->C[j] = pai->C[j-1];
-            for(int j = pai->n + 1; j > i + 1; j--) pai->P[j] = pai->P[j-1];
-            pai->C[i] = chave;
-            pai->P[i+1] = novo_no;
+            while (i < pai->n && strcmp(chave, pai->chaves[i]) >= 0) i++;
+            for (int j = pai->n; j > i; --j) pai->chaves[j] = pai->chaves[j-1];
+            for (int j = pai->n + 1; j > i + 1; --j) pai->ptrs[j] = pai->ptrs[j-1];
+            pai->chaves[i] = new char[strlen(chave) + 1];
+            strcpy(pai->chaves[i], chave);
+            pai->ptrs[i+1] = novo;
             pai->n++;
-            novo_no->pai = pai;
+            novo->pai = pai;
         } else {
-            // ALTERAÇÃO: Alocação dinâmica para remover warning
-            std::string* temp_C = new std::string[k]; 
-            void** temp_P = new void*[k + 1];
-
-            for (int i=0; i<k-1; i++) temp_C[i] = pai->C[i];
-            for (int i=0; i<k; i++) temp_P[i] = pai->P[i];
-            int i=0;
-            while(i < k-1 && chave > temp_C[i]) i++;
-            for(int j=k-1; j>i; j--) temp_C[j] = temp_C[j-1];
-            temp_C[i] = chave;
-            for(int j=k; j>i+1; j--) temp_P[j] = temp_P[j-1];
-            temp_P[i+1] = novo_no;
-            int meio = k/2; std::string chave_promovida = temp_C[meio];
-            No* novo_pai = new No(k, false);
+            // Divide o nó pai se estiver cheio
+            char** tempC = new char*[k];
+            void** tempP = new void*[k + 1];
+            for (int i = 0; i < k-1; ++i) tempC[i] = pai->chaves[i];
+            for (int i = 0; i < k; ++i) tempP[i] = pai->ptrs[i];
+            int i = 0;
+            while (i < k-1 && strcmp(chave, tempC[i]) > 0) i++;
+            for (int j = k-1; j > i; --j) tempC[j] = tempC[j-1];
+            tempC[i] = new char[strlen(chave) + 1];
+            strcpy(tempC[i], chave);
+            for (int j = k; j > i+1; --j) tempP[j] = tempP[j-1];
+            tempP[i+1] = novo;
+            int meio = k/2;
+            char* chavePromovida = tempC[meio];
+            No* novoPai = new No(k, false);
             pai->n = meio;
-            for(int j=0; j<meio; j++){ pai->P[j] = temp_P[j]; pai->C[j] = temp_C[j]; }
-            pai->P[meio] = temp_P[meio];
-            novo_pai->n = (k-1)-meio;
-            for(int j=0; j < novo_pai->n; j++){
-                novo_pai->P[j] = temp_P[j+meio+1]; ((No*)novo_pai->P[j])->pai = novo_pai;
-                novo_pai->C[j] = temp_C[j+meio+1];
+            for (int j = 0; j < meio; ++j) { pai->chaves[j] = tempC[j]; pai->ptrs[j] = tempP[j]; }
+            pai->ptrs[meio] = tempP[meio];
+            novoPai->n = (k-1)-meio;
+            for (int j = 0; j < novoPai->n; ++j) {
+                novoPai->ptrs[j] = tempP[j+meio+1];
+                static_cast<No*>(novoPai->ptrs[j])->pai = novoPai;
+                novoPai->chaves[j] = tempC[j+meio+1];
             }
-            novo_pai->P[novo_pai->n] = temp_P[k]; ((No*)novo_pai->P[novo_pai->n])->pai = novo_pai;
-            
-            // ALTERAÇÃO: Liberação da memória
-            delete[] temp_C;
-            delete[] temp_P;
-
-            inserir_no_pai(pai, chave_promovida, novo_pai);
+            novoPai->ptrs[novoPai->n] = tempP[k];
+            static_cast<No*>(novoPai->ptrs[novoPai->n])->pai = novoPai;
+            delete[] tempC;
+            delete[] tempP;
+            inserirNoPai(pai, chavePromovida, novoPai);
+            delete[] chavePromovida;
         }
     }
 
 public:
-    ArvoreBmais(int ordem) {
-        if (ordem < 3) k = 3; else k = ordem;
-        raiz = new No(k, true);
-    }
+    // Construtor: inicializa árvore com ordem k
+    ArvoreBmais(int ordem) : k(ordem < 3 ? 3 : ordem), raiz(new No(ordem < 3 ? 3 : ordem, true)) {}
+    ~ArvoreBmais() { destruir(raiz); }
 
-    void inserir(Arquivo *arquivo) {
+    // Insere um novo arquivo na árvore
+    void inserir(const char* nome, long long tamanho, const char* hash) {
+        ArquivoInfo* arq = new ArquivoInfo(nome, tamanho, hash);
         No* folha = raiz;
+        // Busca folha apropriada
         while (!folha->folha) {
             int i = 0;
-            while (i < folha->n && arquivo->hash >= folha->C[i]) i++;
-            ((No*)folha->P[i])->pai = folha;
-            folha = (No*)folha->P[i];
+            while (i < folha->n && strcmp(arq->hash, folha->chaves[i]) >= 0) i++;
+            static_cast<No*>(folha->ptrs[i])->pai = folha;
+            folha = static_cast<No*>(folha->ptrs[i]);
         }
         if (folha->n < k - 1) {
+            // Insere na folha se houver espaço
             int i = 0;
-            while (i < folha->n && arquivo->hash > folha->C[i]) i++;
-            for (int j = folha->n; j > i; j--) {
-                folha->C[j] = folha->C[j-1]; folha->P[j] = folha->P[j-1];
+            while (i < folha->n && strcmp(arq->hash, static_cast<ArquivoInfo*>(folha->ptrs[i])->hash) > 0) i++;
+            for (int j = folha->n; j > i; --j) {
+                folha->chaves[j] = folha->chaves[j-1];
+                folha->ptrs[j] = folha->ptrs[j-1];
             }
-            folha->C[i] = arquivo->hash; folha->P[i] = arquivo;
+            folha->chaves[i] = arq->hash;
+            folha->ptrs[i] = arq;
             folha->n++;
         } else {
-            No* nova_folha = new No(k, true);
-            // ALTERAÇÃO: Alocação dinâmica para remover warning
-            std::string* temp_C = new std::string[k]; 
-            void** temp_P = new void*[k];
-
-            for(int i=0; i<k-1; i++) { temp_C[i] = folha->C[i]; temp_P[i] = folha->P[i]; }
-            int i=0;
-            while(i < k-1 && arquivo->hash > temp_C[i]) i++;
-            for(int j=k-1; j>i; j--) { temp_C[j] = temp_C[j-1]; temp_P[j] = temp_P[j-1]; }
-            temp_C[i] = arquivo->hash; temp_P[i] = arquivo;
-            int meio = k/2;
-            folha->n = meio; nova_folha->n = k - meio;
-            for(i=0; i<meio; i++) { folha->C[i] = temp_C[i]; folha->P[i] = temp_P[i]; }
-            for(i=0; i<nova_folha->n; i++) { nova_folha->C[i] = temp_C[i+meio]; nova_folha->P[i] = temp_P[i+meio]; }
-            nova_folha->prox = folha->prox;
-            folha->prox = nova_folha;
-
-            // ALTERAÇÃO: Liberação da memória
-            delete[] temp_C;
-            delete[] temp_P;
-
-            inserir_no_pai(folha, nova_folha->C[0], nova_folha);
-        }
-    }
-    
-    No* buscar_no_folha(std::string hash) {
-        No* folha = raiz;
-        while (folha && !folha->folha) {
+            // Divide a folha se estiver cheia
+            No* novaFolha = new No(k, true);
+            char** tempC = new char*[k];
+            void** tempP = new void*[k];
+            for (int i = 0; i < k-1; ++i) {
+                tempC[i] = static_cast<ArquivoInfo*>(folha->ptrs[i])->hash;
+                tempP[i] = folha->ptrs[i];
+            }
             int i = 0;
-            while (i < folha->n && hash >= folha->C[i]) i++;
-            folha = (No*)folha->P[i];
+            while (i < k-1 && strcmp(arq->hash, tempC[i]) > 0) i++;
+            for (int j = k-1; j > i; --j) {
+                tempC[j] = tempC[j-1];
+                tempP[j] = tempP[j-1];
+            }
+            tempC[i] = arq->hash;
+            tempP[i] = arq;
+            int meio = k/2;
+            folha->n = meio;
+            novaFolha->n = k - meio;
+            for (i = 0; i < meio; ++i) {
+                folha->chaves[i] = static_cast<ArquivoInfo*>(tempP[i])->hash;
+                folha->ptrs[i] = tempP[i];
+            }
+            for (i = 0; i < novaFolha->n; ++i) {
+                novaFolha->chaves[i] = static_cast<ArquivoInfo*>(tempP[i+meio])->hash;
+                novaFolha->ptrs[i] = tempP[i+meio];
+            }
+            novaFolha->prox = folha->prox;
+            folha->prox = novaFolha;
+            delete[] tempC;
+            delete[] tempP;
+            inserirNoPai(folha, static_cast<ArquivoInfo*>(novaFolha->ptrs[0])->hash, novaFolha);
         }
-        return folha;
     }
 
-    bool buscar_exata(std::string hash, std::ofstream& outfile) {
-        outfile << "[" << hash << "]\n"; 
-        No* folha = buscar_no_folha(hash);
+    // Busca folha onde um hash estaria
+    No* buscarFolha(const char* hash) {
+        No* atual = raiz;
+        if (!atual) return 0;
+        while (!atual->folha) {
+            int i = 0;
+            while (i < atual->n && strcmp(hash, atual->chaves[i]) >= 0) i++;
+            atual = static_cast<No*>(atual->ptrs[i]);
+        }
+        return atual;
+    }
+
+    // Busca exata por hash e imprime resultados
+    bool buscarExata(const char* hash, FILE* out) {
+        fprintf(out, "[%s]\n", hash);
+        No* folha = buscarFolha(hash);
         if (!folha) return false;
-        bool encontrado = false;
-        for (int i = 0; i < folha->n; i++) {
-            if (folha->C[i] == hash) {
-                encontrado = true;
+        bool achou = false;
+        for (int i = 0; i < folha->n; ++i) {
+            ArquivoInfo* arq = static_cast<ArquivoInfo*>(folha->ptrs[i]);
+            if (strcmp(arq->hash, hash) == 0) {
+                achou = true;
                 break;
             }
         }
-        if (encontrado) {
-             for (int i = 0; i < folha->n; i++) {
-                Arquivo* resultado = (Arquivo*)folha->P[i];
-                outfile << resultado->nome << ":size=" << resultado->tamanho << ",hash=" << resultado->hash << "\n";
+        if (achou) {
+            for (int i = 0; i < folha->n; ++i) {
+                ArquivoInfo* arq = static_cast<ArquivoInfo*>(folha->ptrs[i]);
+                arq->imprimir(out);
+                fprintf(out, "\n");
             }
         }
-        return encontrado;
+        return achou;
     }
 
-    void buscar_intervalo(std::string hash_inicio, std::string hash_fim, std::ofstream& outfile) {
-        outfile << "[" << hash_inicio << "," << hash_fim << "]\n";
-        No* folha_atual = buscar_no_folha(hash_inicio);
-        if(!folha_atual) return;
-
-        while (folha_atual != nullptr) {
-            if (folha_atual->n > 0 && folha_atual->C[0] > hash_fim) break;
-            bool no_e_relevante = false;
-            for (int i = 0; i < folha_atual->n; i++) {
-                if (folha_atual->C[i] >= hash_inicio && folha_atual->C[i] <= hash_fim) {
-                    no_e_relevante = true;
+    // Busca arquivos em um intervalo de hash
+    bool buscarIntervalo(const char* ini, const char* fim, FILE* out) {
+        fprintf(out, "[%s,%s]\n", ini, fim);
+        No* folha = buscarFolha(ini);
+        bool achou = false;
+        if (!folha) return false;
+        while (folha) {
+            if (folha->n > 0 && strcmp(static_cast<ArquivoInfo*>(folha->ptrs[0])->hash, fim) > 0) break;
+            bool relevante = false;
+            for (int i = 0; i < folha->n; ++i) {
+                const char* h = static_cast<ArquivoInfo*>(folha->ptrs[i])->hash;
+                if (strcmp(h, ini) >= 0 && strcmp(h, fim) <= 0) {
+                    relevante = true;
                     break;
                 }
             }
-            if(no_e_relevante) {
-                for (int i = 0; i < folha_atual->n; i++) {
-                    Arquivo* arq = (Arquivo*)folha_atual->P[i];
-                    outfile << arq->nome << ":size=" << arq->tamanho << ",hash=" << arq->hash << "\n";
+            if (relevante) {
+                achou = true;
+                for (int j = 0; j < folha->n; ++j) {
+                    ArquivoInfo* arq = static_cast<ArquivoInfo*>(folha->ptrs[j]);
+                    arq->imprimir(out);
+                    fprintf(out, "\n");
                 }
             }
-            folha_atual = folha_atual->prox;
+            folha = folha->prox;
         }
+        return achou;
     }
 };
 
-// --- FUNÇÃO MAIN COM A LÓGICA FINAL DO SEPARADOR ---
-int main(int argc, char* argv[]) {
-    if (argc != 3) { return 1; }
+// --- FUNÇÕES DE ARQUIVO ---
 
-    std::ifstream infile(argv[1]);
-    std::ofstream outfile(argv[2]);
-    
-    int ordem_arvore; infile >> ordem_arvore;
-    ArvoreBmais arvore(ordem_arvore);
-
-    int num_arquivos; infile >> num_arquivos;
-    Arquivo* pool_de_arquivos = new Arquivo[num_arquivos + 200]; 
-    int proximo_arquivo_idx = 0;
-
-    for (int i = 0; i < num_arquivos; ++i) {
-        infile >> pool_de_arquivos[proximo_arquivo_idx].nome 
-               >> pool_de_arquivos[proximo_arquivo_idx].tamanho 
-               >> pool_de_arquivos[proximo_arquivo_idx].hash;
-        arvore.inserir(&pool_de_arquivos[proximo_arquivo_idx]);
-        proximo_arquivo_idx++;
+// Importa arquivos do arquivo de entrada para a árvore
+void importar(FILE* in, ArvoreBmais& arv) {
+    int n;
+    fscanf(in, "%d\n", &n);
+    char linha[MAX_LINE_SIZE], nome[MAX_LINE_SIZE], hash[MAX_LINE_SIZE];
+    long long tam;
+    for (int i = 0; i < n; ++i) {
+        if (!fgets(linha, sizeof(linha), in)) continue;
+        if (sscanf(linha, "%s %lld %s", nome, &tam, hash) == 3)
+            arv.inserir(nome, tam, hash);
     }
+}
 
-    int num_operacoes; infile >> num_operacoes;
-    std::string linha_inteira;
-    std::getline(infile, linha_inteira); 
-
-    for (int i = 0; i < num_operacoes; ++i) {
-        if (!std::getline(infile, linha_inteira) || linha_inteira.empty()) { i--; continue; }
-        
-        std::stringstream ss(linha_inteira);
-        std::string operacao; ss >> operacao;
-
-        if (operacao == "INSERT") {
-            ss >> pool_de_arquivos[proximo_arquivo_idx].nome 
-               >> pool_de_arquivos[proximo_arquivo_idx].tamanho 
-               >> pool_de_arquivos[proximo_arquivo_idx].hash;
-            arvore.inserir(&pool_de_arquivos[proximo_arquivo_idx]);
-        } else if (operacao == "SELECT") {
-            std::string token1; ss >> token1;
-            if (token1 == "RANGE") {
-                std::string hash1, hash2;
-                ss >> hash1 >> hash2;
-                arvore.buscar_intervalo(hash1, hash2, outfile);
-                if (i < num_operacoes - 1) {
-                    outfile << "-\n";
+// Processa comandos INSERT e SELECT do arquivo de entrada
+void processar(FILE* in, FILE* out, ArvoreBmais& arv) {
+    int n;
+    fscanf(in, "%d\n", &n);
+    char linha[MAX_LINE_SIZE], op[10], nome[MAX_LINE_SIZE], h1[MAX_LINE_SIZE], h2[MAX_LINE_SIZE];
+    long long tam;
+    for (int i = 0; i < n; ++i) {
+        if (!fgets(linha, sizeof(linha), in)) { i--; continue; }
+        sscanf(linha, "%s", op);
+        if (strcmp(op, "INSERT") == 0) {
+            sscanf(linha, "%*s %s %lld %s", nome, &tam, h1);
+            arv.inserir(nome, tam, h1);
+        } else if (strcmp(op, "SELECT") == 0) {
+            char t1[10];
+            sscanf(linha, "%*s %s", t1);
+            if (strcmp(t1, "RANGE") == 0) {
+                sscanf(linha, "%*s %*s %s %s", h1, h2);
+                if (strcmp(h1, h2) > 0) {
+                    char tmp[MAX_LINE_SIZE];
+                    strcpy(tmp, h1); strcpy(h1, h2); strcpy(h2, tmp);
                 }
+                if (!arv.buscarIntervalo(h1, h2, out)) fprintf(out, "-\n");
             } else {
-                bool encontrado = arvore.buscar_exata(token1, outfile);
-                if (!encontrado && i < num_operacoes - 1) {
-                    outfile << "-\n";
-                }
+                strcpy(h1, t1);
+                if (!arv.buscarExata(h1, out)) fprintf(out, "-\n");
             }
         }
     }
-    
-    delete[] pool_de_arquivos;
-    infile.close();
-    outfile.close();
+}
 
+// --- MAIN ---
+
+int main(int argc, char* argv[]) {
+    if (argc != 3) {
+        fprintf(stderr, "Uso: %s <entrada> <saida>\n", argv[0]);
+        return 1;
+    }
+    FILE* in = fopen(argv[1], "r");
+    FILE* out = fopen(argv[2], "w");
+    if (!in || !out) {
+        fprintf(stderr, "Erro ao abrir arquivos.\n");
+        if (in) fclose(in);
+        if (out) fclose(out);
+        return 1;
+    }
+    int ordem;
+    fscanf(in, "%d", &ordem);
+    ArvoreBmais arv(ordem);
+    importar(in, arv);      // Importa dados iniciais
+    processar(in, out, arv); // Processa comandos
+    fclose(in);
+    fclose(out);
     return 0;
 }
