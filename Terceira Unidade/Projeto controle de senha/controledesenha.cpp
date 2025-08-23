@@ -1,170 +1,189 @@
-#include <stdio.h>
-#include <string.h> // Para strcmp, strcpy, strlen
+#include <iostream>
+#include <fstream>
+#include <cstring>
+#include <cstdint>
+#include <cctype>
 
-// --- ESTRUTURAS ---
 struct Pessoa {
-    char nome[51];
-    int idade;
-    int ordemChegada;
-    int prioridade; // 1 para preferencial (>= 60), 0 para convencional
+    char* nome;
+    uint32_t idade;
+    uint32_t prioridade;
+    uint32_t ordemChegada;
+    Pessoa() : nome(nullptr), idade(0), prioridade(0), ordemChegada(0) {}
+    Pessoa(const Pessoa& other) {
+        idade = other.idade; prioridade = other.prioridade; ordemChegada = other.ordemChegada;
+        if (other.nome) { nome = new char[strlen(other.nome) + 1]; strcpy(nome, other.nome); } else { nome = nullptr; }
+    }
+    Pessoa& operator=(const Pessoa& other) {
+        if (this == &other) return *this;
+        delete[] nome;
+        idade = other.idade; prioridade = other.prioridade; ordemChegada = other.ordemChegada;
+        if (other.nome) { nome = new char[strlen(other.nome) + 1]; strcpy(nome, other.nome); } else { nome = nullptr; }
+        return *this;
+    }
+    ~Pessoa() { delete[] nome; }
 };
-
-struct Heap {
-    Pessoa* pessoas;
-    int tamanho;
-    int capacidade;
+class FilaPrioridade {
+private:
+    Pessoa* heap; uint32_t capacidade; uint32_t tamanho;
+    uint32_t pai(uint32_t i) { return (i - 1) / 2; }
+    uint32_t esquerdo(uint32_t i) { return (2 * i) + 1; }
+    uint32_t direito(uint32_t i) { return (2 * i) + 2; }
+    void trocar(Pessoa& a, Pessoa& b) { Pessoa temp = a; a = b; b = temp; }
+    void heapify(uint32_t i) {
+        uint32_t e = esquerdo(i), d = direito(i), maior = i;
+        if (e < tamanho) { if (heap[e].prioridade > heap[maior].prioridade || (heap[e].prioridade == heap[maior].prioridade && heap[e].ordemChegada < heap[maior].ordemChegada)) maior = e; }
+        if (d < tamanho) { if (heap[d].prioridade > heap[maior].prioridade || (heap[d].prioridade == heap[maior].prioridade && heap[d].ordemChegada < heap[maior].ordemChegada)) maior = d; }
+        if (maior != i) { trocar(heap[i], heap[maior]); heapify(maior); }
+    }
+public:
+    FilaPrioridade(uint32_t cap = 10) : capacidade(cap), tamanho(0) { heap = new Pessoa[capacidade]; }
+    ~FilaPrioridade() { delete[] heap; }
+    bool vazia() const { return tamanho == 0; }
+    void enfileirar(const Pessoa& p) {
+        if (tamanho == capacidade) {
+            capacidade *= 2; Pessoa* novoHeap = new Pessoa[capacidade];
+            for (uint32_t i = 0; i < tamanho; ++i) novoHeap[i] = heap[i];
+            delete[] heap; heap = novoHeap;
+        }
+        uint32_t i = tamanho; heap[i] = p; tamanho++;
+        while (i != 0) {
+            uint32_t p_idx = pai(i); bool deveSubir = false;
+            if (heap[i].prioridade > heap[p_idx].prioridade || (heap[i].prioridade == heap[p_idx].prioridade && heap[i].ordemChegada < heap[p_idx].ordemChegada)) deveSubir = true;
+            if (deveSubir) { trocar(heap[i], heap[p_idx]); i = p_idx; } else break;
+        }
+    }
+    Pessoa desenfileirar() {
+        if (vazia()) return Pessoa();
+        Pessoa raiz = heap[0]; heap[0] = heap[tamanho - 1]; tamanho--; heapify(0); return raiz;
+    }
 };
+struct Orgao { char nome[51]; uint32_t atendentes; FilaPrioridade fila; };
 
-struct Orgao {
-    char nome[51];
-    int numAtendentes;
-    Heap fila;
-};
-
-// --- FUNÇÕES DO HEAP (IMPLEMENTAÇÃO COMPLETA) ---
-int pai(int i) { return (i - 1) / 2; }
-int esquerdo(int i) { return 2 * i + 1; }
-int direito(int i) { return 2 * i + 2; }
-
-void trocar(Pessoa& a, Pessoa& b) {
-    Pessoa temp = a;
-    a = b;
-    b = temp;
-}
-
-// Compara duas pessoas para o Max-Heap
-bool temMaiorPrioridade(Pessoa p1, Pessoa p2) {
-    if (p1.prioridade != p2.prioridade) {
-        return p1.prioridade > p2.prioridade;
+void trim(char* str) {
+    if (str == nullptr) return;
+    char* start = str;
+    while (*start != '\0' && isspace((unsigned char)*start)) {
+        start++;
     }
-    return p1.ordemChegada < p2.ordemChegada; // Desempate: quem chegou antes
-}
-
-// Função Heapify "para baixo" (usada na remoção)
-void heapify_down(Heap& heap, int i) {
-    int e = esquerdo(i);
-    int d = direito(i);
-    int maior = i;
-
-    if (e < heap.tamanho && temMaiorPrioridade(heap.pessoas[e], heap.pessoas[maior])) {
-        maior = e;
+    char* end = start + strlen(start) - 1;
+    while (end >= start && isspace((unsigned char)*end)) {
+        end--;
     }
-    if (d < heap.tamanho && temMaiorPrioridade(heap.pessoas[d], heap.pessoas[maior])) {
-        maior = d;
-    }
-
-    if (maior != i) {
-        trocar(heap.pessoas[i], heap.pessoas[maior]);
-        heapify_down(heap, maior);
+    *(end + 1) = '\0';
+    if (start != str) {
+        memmove(str, start, strlen(start) + 1);
     }
 }
 
-// Função Heapify "para cima" (usada na inserção)
-void heapify_up(Heap& heap, int i) {
-    while (i > 0 && temMaiorPrioridade(heap.pessoas[i], heap.pessoas[pai(i)])) {
-        trocar(heap.pessoas[i], heap.pessoas[pai(i)]);
-        i = pai(i);
+void formatarNome(char* nome) {
+    if(!nome) return;
+    for (uint32_t i = 0; nome[i] != '\0'; ++i) {
+        if (nome[i] == ' ') {
+            nome[i] = '_';
+        }
     }
 }
 
-void inserirPessoa(Heap& heap, Pessoa p) {
-    if (heap.tamanho == heap.capacidade) return;
-    heap.tamanho++;
-    heap.pessoas[heap.tamanho - 1] = p;
-    heapify_up(heap, heap.tamanho - 1);
-}
-
-Pessoa removerPessoa(Heap& heap) {
-    Pessoa raiz = heap.pessoas[0];
-    heap.pessoas[0] = heap.pessoas[heap.tamanho - 1];
-    heap.tamanho--;
-    heapify_down(heap, 0);
-    return raiz;
-}
-
-// --- FUNÇÃO PRINCIPAL ---
 int main(int argc, char* argv[]) {
-    if (argc > 2) {
-        freopen(argv[1], "r", stdin);
-        freopen(argv[2], "w", stdout);
+    if (argc != 3) {
+        std::cerr << "Uso: " << argv[0] << " <arquivo_entrada> <arquivo_saida>" << std::endl;
+        return 1;
     }
 
-    int numOrgaos;
-    scanf("%d", &numOrgaos);
+    std::ifstream arqEntrada(argv[1]);
+    std::ofstream arqSaida(argv[2]);
 
+    if (!arqEntrada.is_open() || !arqSaida.is_open()) {
+        std::cerr << "Erro ao abrir arquivos." << std::endl;
+        return 1;
+    }
+
+    uint32_t numOrgaos;
+    arqEntrada >> numOrgaos;
     Orgao* orgaos = new Orgao[numOrgaos];
-
-    for (int i = 0; i < numOrgaos; ++i) {
-        scanf("%s %d", orgaos[i].nome, &orgaos[i].numAtendentes);
-        orgaos[i].fila.capacidade = 200;
-        orgaos[i].fila.tamanho = 0;
-        orgaos[i].fila.pessoas = new Pessoa[orgaos[i].fila.capacidade];
+    for (uint32_t i = 0; i < numOrgaos; ++i) {
+        arqEntrada >> orgaos[i].nome >> orgaos[i].atendentes;
+        trim(orgaos[i].nome);
     }
 
-    int numPessoas;
-    scanf("%d", &numPessoas);
-    
-    int ordemAtual = 0;
-    for (int i = 0; i < numPessoas; ++i) {
-        char nomeOrgao[51], nomePessoa[52];
+    uint32_t numPessoas;
+    arqEntrada >> numPessoas;
+    char linha[200];
+    arqEntrada.ignore(); 
+
+    for (uint32_t i = 0; i < numPessoas; ++i) {
+        arqEntrada.getline(linha, 200);
+
+        char orgaoNome[51], pessoaNome[51];
         int idade;
+
+        int linha_idx = 0;
+        int token_idx = 0;
+
+        while(linha[linha_idx] != '\0' && isspace(linha[linha_idx])) linha_idx++;
+        while(linha[linha_idx] != '\0' && linha[linha_idx] != '|') orgaoNome[token_idx++] = linha[linha_idx++];
+        orgaoNome[token_idx] = '\0';
+        trim(orgaoNome);
+        if(linha[linha_idx] == '|') linha_idx++;
+        token_idx = 0;
+
+        while(linha[linha_idx] != '\0' && isspace(linha[linha_idx])) linha_idx++;
+        while(linha[linha_idx] != '\0' && linha[linha_idx] != '|') pessoaNome[token_idx++] = linha[linha_idx++];
+        pessoaNome[token_idx] = '\0';
+        trim(pessoaNome);
+        if(linha[linha_idx] == '|') linha_idx++;
         
-        scanf("%s | %51[^|] | %d", nomeOrgao, nomePessoa, &idade);
+        while(linha[linha_idx] != '\0' && isspace(linha[linha_idx])) linha_idx++;
+        idade = atoi(&linha[linha_idx]);
         
         Pessoa p;
-        if (nomePessoa[0] == ' ') {
-            strcpy(p.nome, nomePessoa + 1);
-        } else {
-            strcpy(p.nome, nomePessoa);
-        }
-        
+        p.nome = new char[strlen(pessoaNome) + 1];
+        strcpy(p.nome, pessoaNome);
         p.idade = idade;
-        p.ordemChegada = ordemAtual++;
-        p.prioridade = (idade >= 60) ? 1 : 0;
+        p.prioridade = (p.idade >= 60) ? 1 : 0;
+        p.ordemChegada = i;
 
-        for (int j = 0; j < numOrgaos; ++j) {
-            if (strcmp(orgaos[j].nome, nomeOrgao) == 0) {
-                inserirPessoa(orgaos[j].fila, p);
+        for (uint32_t j = 0; j < numOrgaos; ++j) {
+            if (strcmp(orgaos[j].nome, orgaoNome) == 0) {
+                orgaos[j].fila.enfileirar(p);
                 break;
             }
         }
     }
 
-    bool continuarAtendimento = true;
-    while(continuarAtendimento) {
-        continuarAtendimento = false;
+    bool atendimentoEmAndamento = true;
+    while (atendimentoEmAndamento) {
+        atendimentoEmAndamento = false;
         
-        for (int i = 0; i < numOrgaos; ++i) {
-            bool imprimiuNomeOrgao = false;
-            for(int j = 0; j < orgaos[i].numAtendentes; ++j) {
-                if(orgaos[i].fila.tamanho > 0) {
-                    if(!imprimiuNomeOrgao) {
-                        printf("%s:", orgaos[i].nome);
-                        imprimiuNomeOrgao = true;
-                    } else {
-                        printf(",");
-                    }
+        for (uint32_t i = 0; i < numOrgaos; ++i) {
+            if (orgaos[i].fila.vazia()) {
+                continue;
+            }
 
-                    Pessoa atendida = removerPessoa(orgaos[i].fila);
-                    
-                    for(size_t k = 0; k < strlen(atendida.nome); ++k){
-                        if(atendida.nome[k] == ' ') atendida.nome[k] = '_';
-                    }
-                    printf(" %s", atendida.nome);
-                    
-                    continuarAtendimento = true;
+            atendimentoEmAndamento = true;
+            // ***** CORREÇÃO 1: Removido o espaço depois do ':' *****
+            arqSaida << orgaos[i].nome << ":";
+
+            uint32_t chamadas = 0;
+            while (chamadas < orgaos[i].atendentes && !orgaos[i].fila.vazia()) {
+                Pessoa atendida = orgaos[i].fila.desenfileirar();
+                formatarNome(atendida.nome);
+                
+                if (chamadas > 0) {
+                    // ***** CORREÇÃO 2: Removido o espaço depois da ',' *****
+                    arqSaida << ",";
                 }
+                arqSaida << atendida.nome;
+                chamadas++;
             }
-            if(imprimiuNomeOrgao) {
-                printf("\n");
-            }
+            arqSaida << std::endl;
         }
     }
 
-    for (int i = 0; i < numOrgaos; ++i) {
-        delete[] orgaos[i].fila.pessoas;
-    }
     delete[] orgaos;
+    arqEntrada.close();
+    arqSaida.close();
 
     return 0;
 }
