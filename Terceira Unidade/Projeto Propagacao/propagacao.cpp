@@ -9,6 +9,11 @@ uint32_t myrand() {
     return next;
 }
 
+// ADICIONADO: A função g(z) como mostrado na imagem do professor
+int g(int z) {
+    return (z + (-1 + (myrand() % 3)));
+}
+
 // Estrutura do Nó (sem alterações)
 struct Node {
     Node* P;
@@ -52,23 +57,23 @@ void union_sets(Node* x_node, Node* y_node) {
     }
 }
 
-// *** FUNÇÃO DE SIMULAÇÃO FINAL ***
+// *** FUNÇÃO DE SIMULAÇÃO COM A LÓGICA CORRETA DO PROFESSOR ***
 void run_simulation_final(int region_id, int height, int width, int x0, int y0, FILE* outputFile) {
     int total_people = height * width;
+    if (total_people == 0) {
+        fprintf(outputFile, "%d:\n", region_id);
+        return;
+    }
     
-    // --- OTIMIZAÇÃO DE MEMÓRIA (ARENA) ---
-    // 1. Calcular o tamanho total de memória necessário
+    // --- Otimizações de memória e I/O mantidas ---
     size_t people_bytes = total_people * sizeof(Node);
     size_t infected_bytes = total_people * sizeof(bool);
     size_t order_bytes = total_people * sizeof(Node*);
-    // 2. Alocar um único bloco gigante
     char* buffer = new char[people_bytes + infected_bytes + order_bytes];
-    // 3. Apontar nossos ponteiros para as seções corretas do bloco
     Node* people = (Node*)buffer;
     bool* infected = (bool*)(buffer + people_bytes);
     Node** infection_order = (Node**)(buffer + people_bytes + infected_bytes);
     
-    // Inicializa o array 'infected' com zeros (false)
     for(int i = 0; i < total_people; ++i) infected[i] = false;
 
     for (int r = 0; r < height; ++r) {
@@ -78,38 +83,47 @@ void run_simulation_final(int region_id, int height, int width, int x0, int y0, 
         }
     }
 
-    int current_x = x0;
-    int current_y = y0;
-    int current_idx = current_y * width + current_x;
-    infected[current_idx] = true;
-    
-    infection_order[0] = &people[current_idx];
+    // Ponto de partida: Paciente Zero
+    int p0_idx = y0 * width + x0;
+    infected[p0_idx] = true;
+    infection_order[0] = &people[p0_idx];
     int infected_count = 1;
+    
+    // MUDANÇA: Criamos um ponteiro para qualquer nó do conjunto dos infectados.
+    // Ele servirá como ponto de entrada para encontrar o representante.
+    Node* any_node_in_infected_set = &people[p0_idx];
 
     while (infected_count < total_people) {
+        // --- INÍCIO DA LÓGICA CORRIGIDA ---
+
+        // 1. O espalhador é SEMPRE o representante do conjunto dos infectados.
+        Node* spreader = find_set_iterative(any_node_in_infected_set);
+        
         int next_x, next_y;
         
+        // 2. A busca pela vítima parte das coordenadas do REPRESENTANTE.
         do {
-            int move_x = -1 + (myrand() % 3);
-            int move_y = -1 + (myrand() % 3);
-            next_x = current_x + move_x;
-            next_y = current_y + move_y;
+            next_x = g(spreader->x);
+            next_y = g(spreader->y);
         } while (next_x < 0 || next_x >= width || next_y < 0 || next_y >= height || infected[next_y * width + next_x]);
 
         int victim_idx = next_y * width + next_x;
+        Node* victim = &people[victim_idx];
+
         infected[victim_idx] = true;
+        infection_order[infected_count++] = victim;
+
+        // 3. Unimos o conjunto do espalhador (representante) com o da vítima.
+        // A união pode fazer com que o representante do conjunto mude para a próxima iteração.
+        union_sets(spreader, victim);
+
+        // 4. Atualizamos nosso "ponto de entrada" para o conjunto. 
+        // A vítima agora pertence ao conjunto, então podemos usá-la.
+        any_node_in_infected_set = victim;
         
-        infection_order[infected_count] = &people[victim_idx];
-        infected_count++;
-
-        union_sets(&people[current_idx], &people[victim_idx]);
-
-        current_x = next_x;
-        current_y = next_y;
-        current_idx = victim_idx;
+        // --- FIM DA LÓGICA CORRIGIDA ---
     }
 
-    // --- OTIMIZAÇÃO DE I/O ---
     fprintf(outputFile, "%d:", region_id);
     for (int j = 0; j < total_people; ++j) {
         fprintf(outputFile, "(%d,%d)", infection_order[j]->x, infection_order[j]->y);
@@ -119,7 +133,6 @@ void run_simulation_final(int region_id, int height, int width, int x0, int y0, 
     }
     fprintf(outputFile, "\n");
 
-    // Apenas um delete para todo o bloco de memória
     delete[] buffer;
 }
 
@@ -129,7 +142,6 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // --- OTIMIZAÇÃO DE I/O: Usando <cstdio> ---
     FILE* inputFile = fopen(argv[1], "r");
     if (!inputFile) {
         std::cerr << "Erro ao abrir o arquivo de entrada: " << argv[1] << std::endl;
@@ -145,7 +157,6 @@ int main(int argc, char* argv[]) {
 
     int numRegions;
     fscanf(inputFile, "%d", &numRegions);
-
     fprintf(outputFile, "Propagação de doenças entre as pessoas\n");
 
     for (int i = 1; i <= numRegions; ++i) {
