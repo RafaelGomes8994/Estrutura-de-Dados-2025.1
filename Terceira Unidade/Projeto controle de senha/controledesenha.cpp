@@ -3,6 +3,7 @@
 #include <cstring>
 #include <cstdint>
 #include <cctype>
+#include <cstdlib>
 
 struct Pessoa {
     char* nome;
@@ -60,6 +61,10 @@ public:
 };
 struct Orgao { char nome[51]; uint32_t atendentes; FilaPrioridade fila; };
 
+int compararOrgaos(const void* a, const void* b) {
+    return strcmp(((Orgao*)a)->nome, ((Orgao*)b)->nome);
+}
+
 void trim(char* str) {
     if (str == nullptr) return;
     char* start = str;
@@ -86,6 +91,8 @@ void formatarNome(char* nome) {
 }
 
 int main(int argc, char* argv[]) {
+    std::ios_base::sync_with_stdio(false);
+
     if (argc != 3) {
         std::cerr << "Uso: " << argv[0] << " <arquivo_entrada> <arquivo_saida>" << std::endl;
         return 1;
@@ -93,6 +100,7 @@ int main(int argc, char* argv[]) {
 
     std::ifstream arqEntrada(argv[1]);
     std::ofstream arqSaida(argv[2]);
+    arqEntrada.tie(NULL);
 
     if (!arqEntrada.is_open() || !arqSaida.is_open()) {
         std::cerr << "Erro ao abrir arquivos." << std::endl;
@@ -106,6 +114,8 @@ int main(int argc, char* argv[]) {
         arqEntrada >> orgaos[i].nome >> orgaos[i].atendentes;
         trim(orgaos[i].nome);
     }
+
+    qsort(orgaos, numOrgaos, sizeof(Orgao), compararOrgaos);
 
     uint32_t numPessoas;
     arqEntrada >> numPessoas;
@@ -144,11 +154,14 @@ int main(int argc, char* argv[]) {
         p.prioridade = (p.idade >= 60) ? 1 : 0;
         p.ordemChegada = i;
 
-        for (uint32_t j = 0; j < numOrgaos; ++j) {
-            if (strcmp(orgaos[j].nome, orgaoNome) == 0) {
-                orgaos[j].fila.enfileirar(p);
-                break;
-            }
+        Orgao chave;
+        strcpy(chave.nome, orgaoNome);
+        Orgao* orgaoEncontrado = (Orgao*)bsearch(&chave, orgaos, numOrgaos, sizeof(Orgao), compararOrgaos);
+
+        if (orgaoEncontrado) {
+            orgaoEncontrado->fila.enfileirar(p);
+        } else {
+            delete[] p.nome;
         }
     }
 

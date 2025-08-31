@@ -35,7 +35,7 @@ struct NoTrie {
  */
 void inserir(NoTrie* raiz, const char* palavra) {
     NoTrie* noAtual = raiz;
-    for (int i = 0; i < strlen(palavra); ++i) {
+    for (size_t i = 0; i < strlen(palavra); ++i) {
         int indice = palavra[i] - 'a';
         if (indice >= 0 && indice < TAMANHO_ALFABETO) {
             if (!noAtual->filhos[indice]) {
@@ -52,7 +52,7 @@ void inserir(NoTrie* raiz, const char* palavra) {
  */
 void encontrarSugestoes(NoTrie* no, char* prefixoAtual, int tamanhoMaximo,
                         std::ofstream& arquivoSaida, bool& primeiraSugestao) {
-    if (no == nullptr || (tamanhoMaximo > 0 && strlen(prefixoAtual) > tamanhoMaximo)) {
+    if (no == nullptr || (tamanhoMaximo > 0 && strlen(prefixoAtual) > static_cast<size_t>(tamanhoMaximo))) {
         return;
     }
 
@@ -90,7 +90,7 @@ void buscar(NoTrie* raiz, const char* requisicao, std::ofstream& arquivoSaida) {
     char prefixoValido[TAMANHO_MAX_PALAVRA] = "";
     int i_prefixoValido = 0;
 
-    for (int i = 0; i < strlen(requisicao); ++i) {
+    for (size_t i = 0; i < strlen(requisicao); ++i) {
         int indice = requisicao[i] - 'a';
         if (indice >= 0 && indice < TAMANHO_ALFABETO && noAtual->filhos[indice]) {
             noAtual = noAtual->filhos[indice];
