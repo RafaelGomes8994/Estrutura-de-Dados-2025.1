@@ -1,161 +1,186 @@
-#include <cstdio> // Para I/O mais rápido (fscanf, fprintf)
-#include <stdint.h>
-#include <iostream> // Apenas para std::cerr em caso de erro
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <cstdint>
 
-// Função myrand() (sem alterações)
+// Estrutura do nó para a abordagem híbrida de conjuntos disjuntos.
+// Mescla a estrutura de árvore (ponteiro para o pai) com a de lista
+// encadeada (para organizar os filhos de um mesmo nó).
+struct No {
+    // Ponteiros para a estrutura de árvore e lista
+    No* pai;
+    No* primeiroFilho; // Ponteiro para o primeiro filho na lista de filhos
+    No* proximoIrmao;  // Ponteiro para o próximo irmão na lista de filhos
+
+    // Heurística de união por tamanho
+    int tamanho;
+
+    // Coordenadas da pessoa na grade
+    int x, y;
+};
+
+// Função pseudoaleatória myrand(), conforme especificado nos slides.
 uint32_t myrand() {
     static uint32_t next = 1;
     next = next * 1103515245 + 12345;
     return next;
 }
 
-// Estrutura do Nó (sem alterações)
-struct Node {
-    Node* P;
-    uint32_t H;
-    int x, y;
-};
-
-// --- Funções Union-Find com a versão iterativa (já otimizada) ---
-void make_set(Node* node, int x, int y) {
-    node->P = node;
-    node->H = 0;
-    node->x = x;
-    node->y = y;
+// Função g(z) para calcular o deslocamento, conforme especificado.
+int g(int z) {
+    return (z + (-1 + (myrand() % 3)));
 }
 
-Node* find_set_iterative(Node* node) {
-    Node* root = node;
-    while (root != root->P) {
-        root = root->P;
-    }
-    Node* current = node;
-    while (current != root) {
-        Node* next = current->P;
-        current->P = root;
-        current = next;
-    }
-    return root;
+// --- Implementação de Conjuntos Disjuntos com Estrutura Híbrida ---
+
+// criar_conjunto: Inicializa um nó como um novo conjunto.
+// É uma raiz sem filhos ou irmãos, com tamanho 1.
+void criar_conjunto(No* x, int coord_x, int coord_y) {
+    x->pai = x;
+    x->primeiroFilho = nullptr;
+    x->proximoIrmao = nullptr;
+    x->tamanho = 1;
+    x->x = coord_x;
+    x->y = coord_y;
 }
 
-void union_sets(Node* x_node, Node* y_node) {
-    Node* root_x = find_set_iterative(x_node);
-    Node* root_y = find_set_iterative(y_node);
-    if (root_x == root_y) return;
-    if (root_x->H > root_y->H) {
-        root_y->P = root_x;
-    } else {
-        root_x->P = root_y;
-        if (root_x->H == root_y->H) {
-            root_y->H++;
-        }
+// encontrar_conjunto: Idêntico à versão com árvores puras.
+// Retorna a raiz do conjunto e aplica COMPRESSÃO DE CAMINHOS.
+No* encontrar_conjunto(No* x) {
+    if (x->pai != x) {
+        x->pai = encontrar_conjunto(x->pai);
     }
+    return x->pai;
 }
 
-// *** FUNÇÃO DE SIMULAÇÃO FINAL ***
-void run_simulation_final(int region_id, int height, int width, int x0, int y0, FILE* outputFile) {
-    int total_people = height * width;
+// unir_conjuntos: Une dois conjuntos usando UNIÃO POR TAMANHO.
+// A raiz da árvore menor é adicionada à lista de filhos da raiz da árvore maior.
+void unir_conjuntos(No* x, No* y) {
+    No* raizX = encontrar_conjunto(x);
+    No* raizY = encontrar_conjunto(y);
+
+    if (raizX == raizY) {
+        return; // Já estão no mesmo conjunto.
+    }
+
+    // Determina a maior e a menor árvore com base no tamanho.
+    No* maior = (raizX->tamanho >= raizY->tamanho) ? raizX : raizY;
+    No* menor = (raizX->tamanho < raizY->tamanho) ? raizX : raizY;
+
+    // 1. A raiz da árvore menor agora aponta para a raiz da maior.
+    menor->pai = maior;
     
-    // --- OTIMIZAÇÃO DE MEMÓRIA (ARENA) ---
-    // 1. Calcular o tamanho total de memória necessário
-    size_t people_bytes = total_people * sizeof(Node);
-    size_t infected_bytes = total_people * sizeof(bool);
-    size_t order_bytes = total_people * sizeof(Node*);
-    // 2. Alocar um único bloco gigante
-    char* buffer = new char[people_bytes + infected_bytes + order_bytes];
-    // 3. Apontar nossos ponteiros para as seções corretas do bloco
-    Node* people = (Node*)buffer;
-    bool* infected = (bool*)(buffer + people_bytes);
-    Node** infection_order = (Node**)(buffer + people_bytes + infected_bytes);
+    // 2. Insere a raiz menor na lista de filhos da raiz maior.
+    menor->proximoIrmao = maior->primeiroFilho;
+    maior->primeiroFilho = menor;
     
-    // Inicializa o array 'infected' com zeros (false)
-    for(int i = 0; i < total_people; ++i) infected[i] = false;
-
-    for (int r = 0; r < height; ++r) {
-        for (int c = 0; c < width; ++c) {
-            int index = r * width + c;
-            make_set(&people[index], c, r);
-        }
-    }
-
-    int current_x = x0;
-    int current_y = y0;
-    int current_idx = current_y * width + current_x;
-    infected[current_idx] = true;
-    
-    infection_order[0] = &people[current_idx];
-    int infected_count = 1;
-
-    while (infected_count < total_people) {
-        int next_x, next_y;
-        
-        do {
-            int move_x = -1 + (myrand() % 3);
-            int move_y = -1 + (myrand() % 3);
-            next_x = current_x + move_x;
-            next_y = current_y + move_y;
-        } while (next_x < 0 || next_x >= width || next_y < 0 || next_y >= height || infected[next_y * width + next_x]);
-
-        int victim_idx = next_y * width + next_x;
-        infected[victim_idx] = true;
-        
-        infection_order[infected_count] = &people[victim_idx];
-        infected_count++;
-
-        union_sets(&people[current_idx], &people[victim_idx]);
-
-        current_x = next_x;
-        current_y = next_y;
-        current_idx = victim_idx;
-    }
-
-    // --- OTIMIZAÇÃO DE I/O ---
-    fprintf(outputFile, "%d:", region_id);
-    for (int j = 0; j < total_people; ++j) {
-        fprintf(outputFile, "(%d,%d)", infection_order[j]->x, infection_order[j]->y);
-        if (j < total_people - 1) {
-            fprintf(outputFile, ";");
-        }
-    }
-    fprintf(outputFile, "\n");
-
-    // Apenas um delete para todo o bloco de memória
-    delete[] buffer;
+    // 3. Atualiza o tamanho da nova árvore unificada.
+    maior->tamanho += menor->tamanho;
 }
 
-int main(int argc, char* argv[]) {
+// --- Função Principal ---
+
+int main(int argc, char *argv[]) {
+    // Otimização para acelerar a leitura e escrita de dados
+    std::ios_base::sync_with_stdio(false);
+    std::cin.tie(NULL);
+
     if (argc != 3) {
-        std::cerr << "Uso: ./executavel <arquivo_entrada> <arquivo_saida>" << std::endl;
+        std::cerr << "Uso: " << argv[0] << " <arquivo_entrada> <arquivo_saida>" << std::endl;
         return 1;
     }
 
-    // --- OTIMIZAÇÃO DE I/O: Usando <cstdio> ---
-    FILE* inputFile = fopen(argv[1], "r");
-    if (!inputFile) {
-        std::cerr << "Erro ao abrir o arquivo de entrada: " << argv[1] << std::endl;
-        return 1;
+    std::ifstream inputFile(argv[1]);
+    std::ofstream outputFile(argv[2]);
+
+    int num_regioes;
+    inputFile >> num_regioes;
+
+    for (int r = 1; r <= num_regioes; ++r) {
+        int altura, largura, x0, y0;
+        inputFile >> altura >> largura >> x0 >> y0;
+
+        int total_pessoas = altura * largura;
+        
+        // CORREÇÃO 1: Aloca um array contíguo para os OBJETOS No.
+        No* pessoas = new No[total_pessoas];
+        
+        // CORREÇÃO 2: A grid é declarada como uma matriz de OBJETOS (No**).
+        No** grid = new No*[altura];
+        for (int i = 0; i < altura; ++i) {
+            grid[i] = new No[largura];
+        }
+
+        // CORREÇÃO 3: Preenche a grid com os OBJETOS.
+        for (int i = 0; i < altura; ++i) {
+            for (int j = 0; j < largura; ++j) {
+                int index = i * largura + j;
+                // Copia o objeto do array pessoas para a grid.
+                grid[i][j] = pessoas[index];
+                // Inicializa o objeto na grid.
+                criar_conjunto(&grid[i][j], i, j);
+            }
+        }
+        
+        // CORREÇÃO 4: Usa o endereço do objeto na grid.
+        No* paciente_zero = &grid[x0][y0];
+        No* rep_infectados = encontrar_conjunto(paciente_zero);
+        int num_conjuntos = total_pessoas;
+
+        No** ordem_infeccao = new No*[total_pessoas];
+        ordem_infeccao[0] = paciente_zero;
+        int infectados_count = 1;
+
+        while (num_conjuntos > 1) {
+            int propagador_x = rep_infectados->x;
+            int propagador_y = rep_infectados->y;
+            
+            No* vitima;
+            No* rep_vitima;
+
+            do {
+                int novo_x, novo_y;
+                
+                do {
+                    novo_x = g(propagador_x);
+                } while (novo_x < 0 || novo_x >= altura);
+
+                do {
+                    novo_y = g(propagador_y);
+                } while (novo_y < 0 || novo_y >= largura);
+                
+                // CORREÇÃO 5: A atribuição para 'vitima' (No*) funciona.
+                vitima = &grid[novo_x][novo_y];
+                rep_vitima = encontrar_conjunto(vitima);
+
+            } while (rep_vitima == rep_infectados);
+
+            unir_conjuntos(rep_infectados, vitima);
+            num_conjuntos--;
+
+            rep_infectados = encontrar_conjunto(rep_infectados);
+            
+            ordem_infeccao[infectados_count] = vitima;
+            infectados_count++;
+        }
+
+        outputFile << r << ":";
+        for (int i = 0; i < infectados_count; ++i) {
+            outputFile << "(" << ordem_infeccao[i]->x << "," << ordem_infeccao[i]->y << ");";
+        }
+        outputFile << std::endl;
+
+        delete[] pessoas;
+        for (int i = 0; i < altura; ++i) {
+            delete[] grid[i];
+        }
+        delete[] grid;
+        delete[] ordem_infeccao;
     }
 
-    FILE* outputFile = fopen(argv[2], "w");
-    if (!outputFile) {
-        std::cerr << "Erro ao abrir o arquivo de saida: " << argv[2] << std::endl;
-        fclose(inputFile);
-        return 1;
-    }
-
-    int numRegions;
-    fscanf(inputFile, "%d", &numRegions);
-
-    fprintf(outputFile, "Propagação de doenças entre as pessoas\n");
-
-    for (int i = 1; i <= numRegions; ++i) {
-        int height, width, x0, y0;
-        fscanf(inputFile, "%d %d %d %d", &height, &width, &x0, &y0);
-        run_simulation_final(i, height, width, x0, y0, outputFile);
-    }
-
-    fclose(inputFile);
-    fclose(outputFile);
+    inputFile.close();
+    outputFile.close();
 
     return 0;
 }
+
