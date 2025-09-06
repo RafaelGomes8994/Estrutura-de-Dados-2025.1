@@ -1,168 +1,188 @@
-#include <iostream>
+#include <cstdint>
 #include <fstream>
-#include <cstring> // Para funções de C-string como strlen, strcpy, etc.
+#include <iostream>
+#include <string>
 
-// O alfabeto considerado é [a-z]
-const int TAMANHO_ALFABETO = 26;
-// Tamanho máximo de uma palavra/prefixo conforme o PDF
-const int TAMANHO_MAX_PALAVRA = 21; // 20 caracteres + 1 para o '\0'
-// Tamanho máximo para uma sugestão (dobro do maior prefixo)
-const int TAMANHO_MAX_SUGESTAO = 41; 
+using std::cout;
+using std::endl;
+using std::getline;
+using std::ifstream;
+using std::ios_base;
+using std::ofstream;
+using std::stoi;
+using std::string;
 
-/**
- * @brief Estrutura do nó da Árvore de Prefixo (Trie).
- */
-struct NoTrie {
-    NoTrie* filhos[TAMANHO_ALFABETO];
-    bool fimDaPalavra;
+ifstream entrada;
+ofstream saida;
 
-    NoTrie() {
-        fimDaPalavra = false;
-        for (int i = 0; i < TAMANHO_ALFABETO; ++i) {
-            filhos[i] = nullptr;
-        }
-    }
+constexpr int MAX_COMPRIMENTO_PALAVRA = 30;
 
-    ~NoTrie() {
-        for (int i = 0; i < TAMANHO_ALFABETO; ++i) {
-            delete filhos[i];
+struct No {
+    char valor;
+    bool ePalavra;
+    uint32_t ultimoIdBusca;
+    No* ponteiros[26];
+
+    No(char letra, bool epal) {
+        valor = letra;
+        ePalavra = epal;
+        ultimoIdBusca = 0;
+        for (int i = 0; i < 26; i++) {
+            ponteiros[i] = nullptr;
         }
     }
 };
 
-/**
- * @brief Insere uma palavra na árvore de prefixo.
- */
-void inserir(NoTrie* raiz, const char* palavra) {
-    NoTrie* noAtual = raiz;
-    for (size_t i = 0; i < strlen(palavra); ++i) {
-        int indice = palavra[i] - 'a';
-        if (indice >= 0 && indice < TAMANHO_ALFABETO) {
-            if (!noAtual->filhos[indice]) {
-                noAtual->filhos[indice] = new NoTrie();
-            }
-            noAtual = noAtual->filhos[indice];
-        }
-    }
-    noAtual->fimDaPalavra = true;
-}
+struct Trie {
+    No* raiz;
+    uint32_t idBuscaAtual;
 
-/**
- * @brief Função recursiva para encontrar e escrever as sugestões. (VERSÃO CORRIGIDA)
- */
-void encontrarSugestoes(NoTrie* no, char* prefixoAtual, int tamanhoMaximo,
-                        std::ofstream& arquivoSaida, bool& primeiraSugestao) {
-    if (no == nullptr || (tamanhoMaximo > 0 && strlen(prefixoAtual) > static_cast<size_t>(tamanhoMaximo))) {
-        return;
-    }
-
-    if (no->fimDaPalavra) {
-        if (primeiraSugestao) {
-            // Apenas marca que a primeira foi impressa. Não precisa de espaço.
-            primeiraSugestao = false;
-        } else {
-            // Imprime a vírgula sem espaços.
-            arquivoSaida << ",";
-        }
-        arquivoSaida << prefixoAtual;
-    }
-
-    // A lógica recursiva permanece a mesma...
-    for (int i = 0; i < TAMANHO_ALFABETO; ++i) {
-        if (no->filhos[i]) {
-            int len = strlen(prefixoAtual);
-            prefixoAtual[len] = 'a' + i;
-            prefixoAtual[len + 1] = '\0';
-            encontrarSugestoes(no->filhos[i], prefixoAtual, tamanhoMaximo, arquivoSaida, primeiraSugestao);
-            prefixoAtual[len] = '\0';
-        }
-    }
-}
-
-
-/**
- * @brief Busca pelo maior prefixo válido e inicia a impressão das sugestões. (VERSÃO CORRIGIDA)
- */
-void buscar(NoTrie* raiz, const char* requisicao, std::ofstream& arquivoSaida) {
-    arquivoSaida << requisicao << ":";
-    
-    NoTrie* noAtual = raiz;
-    char prefixoValido[TAMANHO_MAX_PALAVRA] = "";
-    int i_prefixoValido = 0;
-
-    for (size_t i = 0; i < strlen(requisicao); ++i) {
-        int indice = requisicao[i] - 'a';
-        if (indice >= 0 && indice < TAMANHO_ALFABETO && noAtual->filhos[indice]) {
-            noAtual = noAtual->filhos[indice];
-            prefixoValido[i_prefixoValido++] = requisicao[i];
-            prefixoValido[i_prefixoValido] = '\0';
-        } else {
-            break;
-        }
+    Trie() {
+        raiz = new No(' ', false);
+        idBuscaAtual = 1;
     }
     
-    bool primeira = true;
+    ~Trie() {
+        // Implementar destrutor recursivo se houver preocupação com vazamento de memória
+    }
     
-    // Continua apenas se um prefixo válido foi encontrado
-    if (strlen(prefixoValido) > 0) {
-        char bufferSugestao[TAMANHO_MAX_SUGESTAO];
-        strcpy(bufferSugestao, prefixoValido);
+    int32_t determinarIndice(const string& palavra, uint32_t posicao) {
+        return palavra[posicao] - 'a';
+    }
+
+    void adicionar(const string& palavra) {
+        if (!palavra.empty()) {
+            adicionarPalavra(raiz, palavra, 0);
+        }
+    }
+
+    void adicionarPalavra(No* noAtual, const string& palavra, uint32_t d) {
+        if (d == palavra.length()) {
+            noAtual->ePalavra = true;
+            return;
+        }
+        int indice = determinarIndice(palavra, d);
+        if (indice < 0 || indice >= 26) return;
+
+        if (noAtual->ponteiros[indice] == nullptr) {
+            noAtual->ponteiros[indice] = new No(palavra[d], false);
+        }
+        adicionarPalavra(noAtual->ponteiros[indice], palavra, d + 1);
+    }
+
+    void searchStart(const string& palavra) {
+        string linhaResultado = palavra + ":";
+        // --- OTIMIZAÇÃO 1: Pré-alocação de memória ---
+        // Aloca 16KB de uma vez para evitar múltiplas realocações.
+        // Ajuste este valor se as linhas de saída forem maiores.
+        linhaResultado.reserve(16384);
+
+        bool encontrouAlgo = false;
+        char buffer[MAX_COMPRIMENTO_PALAVRA];
+        No* atual = raiz;
         
-        int tamanhoMax = strlen(requisicao) * 2;
-        if (strlen(requisicao) == 0) tamanhoMax = 0; 
+        for (uint32_t i = 0; i < palavra.length(); ++i) {
+            char c = palavra[i];
+            int index = c - 'a';
+            if (index < 0 || index >= 26 || !atual->ponteiros[index]) {
+                break;
+            }
+            atual = atual->ponteiros[index];
+            buffer[i] = c;
+            int comprimentoMaximo = (i + 1) * 2;
+            procurarNaTrie(atual, buffer, i + 1, comprimentoMaximo, linhaResultado, encontrouAlgo);
+        }
+        
+        if (encontrouAlgo) {
+            linhaResultado.pop_back();
+        } else {
+            linhaResultado += "-";
+        }
 
-        encontrarSugestoes(noAtual, bufferSugestao, tamanhoMax, arquivoSaida, primeira);
+        // --- OTIMIZAÇÃO 2: Usar '\n' em vez de endl ---
+        // Evita forçar a descarga (flush) do buffer de saída a cada linha.
+        saida << linhaResultado << '\n';
+        idBuscaAtual++;
     }
 
-    // *** A MUDANÇA PRINCIPAL ESTÁ AQUI ***
-    // Se 'primeira' ainda for true, nenhuma sugestão foi encontrada.
-    if (primeira) {
-        arquivoSaida << "-";
+private:
+    void procurarNaTrie(No* subarvore, char* buffer, int profundidade, uint16_t comprimentoMaximo, string& linha, bool& encontrouAlgo) {
+        if (profundidade > comprimentoMaximo) {
+            return;
+        }
+        
+        if (subarvore->ePalavra && subarvore->ultimoIdBusca != idBuscaAtual) {
+            buffer[profundidade] = '\0';
+            linha += buffer;
+            linha += ",";
+            subarvore->ultimoIdBusca = idBuscaAtual;
+            encontrouAlgo = true;
+        }
+
+        if (profundidade >= MAX_COMPRIMENTO_PALAVRA - 1) {
+            return;
+        }
+
+        for (int i = 0; i < 26; i++) {
+            if (subarvore->ponteiros[i]) {
+                No* filho = subarvore->ponteiros[i];
+                buffer[profundidade] = filho->valor;
+                procurarNaTrie(filho, buffer, profundidade + 1, comprimentoMaximo, linha, encontrouAlgo);
+            }
+        }
+    }
+};
+
+
+// A função principal recebe os argumentos da linha de comando.
+// argc: contém o número de argumentos passados para o programa.
+// argv: é um array de strings (char*) contendo os argumentos.
+// argv[0] é o nome do programa.
+// argv[1] é o primeiro argumento (arquivo de entrada).
+// argv[2] é o segundo argumento (arquivo de saída).
+int main(int argc, char** argv) {
+    // --- OTIMIZAÇÃO 3: Acelerar toda a Leitura/Escrita ---
+    // Desativa a sincronização com os fluxos de E/S do C padrão para maior velocidade.
+    ios_base::sync_with_stdio(false);
+    // Desvincula `cin` de `cout` para evitar flushes desnecessários.
+    entrada.tie(NULL);
+
+    // Verifica se o número de argumentos é suficiente (nome do programa + arq. entrada + arq. saída).
+    if (argc < 3) {
+        cout << "Argumentos insuficientes. Uso: ./programa <arquivo_entrada> <arquivo_saida>" << endl;
+        return EXIT_FAILURE;
     }
 
-    arquivoSaida << "\n";
-}
+    // Abertura dos arquivos
+    // O primeiro argumento (argv[1]) é o caminho para o arquivo de entrada.
+    entrada.open(argv[1]);
+    // O segundo argumento (argv[2]) é o caminho para o arquivo de saída.
+    saida.open(argv[2]);
 
-/**
- * @brief Função principal que orquestra a execução do programa.
- */
-int main(int argc, char* argv[]) {
-    if (argc != 3) {
-        std::cerr << "Uso: " << argv[0] << " <arquivo_entrada> <arquivo_saida>\n";
-        return 1;
+    Trie arvore;
+    string linha;
+
+    // Lê o número de palavras a serem adicionadas.
+    getline(entrada, linha);
+    int req_add = stoi(linha);
+    // Lê cada palavra do arquivo de entrada e a adiciona na Trie.
+    for (int i = 0; i < req_add; i++) {
+        getline(entrada, linha);
+        arvore.adicionar(linha);
     }
 
-    std::ifstream arquivoEntrada(argv[1]);
-    if (!arquivoEntrada) {
-        std::cerr << "Erro: Nao foi possivel abrir o arquivo de entrada " << argv[1] << "\n";
-        return 1;
+    // Lê o número de buscas a serem realizadas.
+    getline(entrada, linha);
+    int req_search = stoi(linha);
+    // Lê cada prefixo de busca e executa a busca na Trie.
+    for (int i = 0; i < req_search; i++) {
+        getline(entrada, linha);
+        arvore.searchStart(linha);
     }
 
-    std::ofstream arquivoSaida(argv[2]);
-    if (!arquivoSaida) {
-        std::cerr << "Erro: Nao foi possivel abrir o arquivo de saida " << argv[2] << "\n";
-        return 1;
-    }
-
-    NoTrie* raiz = new NoTrie();
-    char buffer[TAMANHO_MAX_PALAVRA];
-    int n_termos, n_requisicoes;
-
-    arquivoEntrada >> n_termos;
-    for (int i = 0; i < n_termos; ++i) {
-        arquivoEntrada >> buffer;
-        inserir(raiz, buffer);
-    }
-
-    arquivoEntrada >> n_requisicoes;
-    for (int i = 0; i < n_requisicoes; ++i) {
-        arquivoEntrada >> buffer;
-        buscar(raiz, buffer, arquivoSaida);
-    }
-
-    arquivoEntrada.close();
-    arquivoSaida.close();
-    delete raiz;
+    // Fecha os arquivos após o uso.
+    entrada.close();
+    saida.close();
 
     return 0;
 }
