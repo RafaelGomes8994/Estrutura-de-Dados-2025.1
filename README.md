@@ -45,7 +45,8 @@ O conteúdo está organizado em unidades, correspondendo aos períodos do curso,
     -   Arquivo principal: [`Terceira Unidade/Projeto Propagacao/propagacao.cpp`](Terceira%20Unidade/Projeto%20Propagacao/propagacao.cpp)
 -   **Projeto Autocompletar**: Implementação de um sistema de autocompletar palavras utilizando uma Árvore Trie (Prefix Tree).
     -   Arquivo principal: [`Terceira Unidade/Projeto Autocompletar/autocompletar.cpp`](Terceira%20Unidade/Projeto%20Autocompletar/autocompletar.cpp)
--   **Projeto Loteria**: (Descrição pendente).
+-   **Projeto Loteria**: Simulação de um sistema de loteria que utiliza conjuntos disjuntos (Union-Find) para agrupar apostadores que compartilham os mesmos números e determinar os vencedores.
+    -   Arquivo principal: [`Terceira Unidade/Projeto Loteria/loteria.cpp`](Terceira%20Unidade/Projeto%20Loteria/loteria.cpp)
 
 ---
 
