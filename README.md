@@ -41,11 +41,11 @@ O conteúdo está organizado em unidades, correspondendo aos períodos do curso,
 
 -   **Projeto Controle de Senha**: Sistema para gerenciamento de filas de atendimento em múltiplos órgãos, utilizando filas de prioridade (implementadas com heap) para organizar as senhas.
     -   Arquivo principal: [`Terceira Unidade/Projeto controle de senha/controledesenha.cpp`](Terceira%20Unidade/Projeto%20controle%20de%20senha/controledesenha.cpp)
--   **Projeto Propagação**: Simulação de um processo de propagação em uma matriz, como um incêndio ou um boato, utilizando algoritmos de busca em largura (BFS).
+-   **Projeto Propagação**: Simulação de um sistema de loteria que utiliza conjuntos disjuntos (Union-Find) para agrupar apostadores que compartilham os mesmos números e determinar os vencedores.
     -   Arquivo principal: [`Terceira Unidade/Projeto Propagacao/propagacao.cpp`](Terceira%20Unidade/Projeto%20Propagacao/propagacao.cpp)
 -   **Projeto Autocompletar**: Implementação de um sistema de autocompletar palavras utilizando uma Árvore Trie (Prefix Tree).
     -   Arquivo principal: [`Terceira Unidade/Projeto Autocompletar/autocompletar.cpp`](Terceira%20Unidade/Projeto%20Autocompletar/autocompletar.cpp)
--   **Projeto Loteria**: Simulação de um sistema de loteria que utiliza conjuntos disjuntos (Union-Find) para agrupar apostadores que compartilham os mesmos números e determinar os vencedores.
+-   **Projeto Loteria**: Simulação de um processo de propagação em uma matriz, como um incêndio ou um boato, utilizando algoritmos de busca em largura (BFS).
     -   Arquivo principal: [`Terceira Unidade/Projeto Loteria/loteria.cpp`](Terceira%20Unidade/Projeto%20Loteria/loteria.cpp)
 
 ---
