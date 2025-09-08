@@ -1,5 +1,0 @@
-DETRAN:Chico_Jose,Jair_Luiz
-SSP:Joao_da_Silva
-DETRAN:Inacio_Messias,Josefa_Souza
-SSP:Jose_dos_Santos
-DETRAN:Ana_Maria
